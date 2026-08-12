@@ -2,8 +2,17 @@
 .env
 .env.*
 !.env.example
+!**/.env.example
 
-# Python
+# --- Next.js app (repo root) ---
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Python (streamlit-poc/) ---
 __pycache__/
 *.py[cod]
 *$py.class
@@ -14,16 +23,10 @@ dist/
 .venv/
 venv/
 env/
-
-# Vector store / generated data
-data/vector_store/
-data/knowledge_base/*
-!data/knowledge_base/.gitkeep
-
-# Streamlit
+**/data/vector_store/
+**/data/knowledge_base/*
+!**/data/knowledge_base/.gitkeep
 .streamlit/secrets.toml
-
-# Testing / tooling
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
