@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import ReactMarkdown from "react-markdown";
 
+import { Logo } from "@/design-system/components/brand/Logo";
 import { Button } from "@/design-system/components/buttons/Button";
 import type { OperationProfile, RoutingResult } from "@/lib/routing/schema";
 
@@ -103,50 +104,60 @@ export function Chat() {
   const isLoading = status === "submitted" || status === "streaming";
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <ProfileSidebar profile={profile} routing={routing} />
-      <main className="flex flex-1 flex-col p-6">
-        <h1
-          style={{
-            fontFamily: "var(--font-headline)",
-            fontSize: "clamp(28px, 4vw, var(--type-h3-size))",
-            fontWeight: "var(--type-h3-weight)" as unknown as number,
-          }}
-        >
-          Maine Aquaculture License Assistant
-        </h1>
-        <p className="mb-6 mt-2 max-w-2xl text-sm" style={{ color: "var(--pai-gray-800)" }}>
-          Conversational assistant for Maine aquaculture license triage and regulatory Q&amp;A.
-          Proof of concept — not a substitute for DMR guidance.
-        </p>
+    <div className="flex min-h-screen flex-col">
+      <header
+        className="flex items-center px-6 py-4"
+        style={{ borderBottom: "1px solid var(--border-hairline)" }}
+      >
+        <a href="https://publicai.co" target="_blank" rel="noreferrer">
+          <Logo height={28} assetsBase="/assets" />
+        </a>
+      </header>
+      <div className="flex flex-1 flex-col md:flex-row">
+        <ProfileSidebar profile={profile} routing={routing} />
+        <main className="flex flex-1 flex-col p-6">
+          <h1
+            style={{
+              fontFamily: "var(--font-headline)",
+              fontSize: "clamp(28px, 4vw, var(--type-h3-size))",
+              fontWeight: "var(--type-h3-weight)" as unknown as number,
+            }}
+          >
+            Maine Aquaculture License Assistant
+          </h1>
+          <p className="mb-6 mt-2 max-w-2xl text-sm" style={{ color: "var(--pai-gray-800)" }}>
+            Conversational assistant for Maine aquaculture license triage and regulatory Q&amp;A.
+            Proof of concept — not a substitute for DMR guidance.
+          </p>
 
-        <div className="flex-1 space-y-4 overflow-y-auto">
-          <ChatBubble role="assistant" content={GREETING} />
-          {messages.map((message) => (
-            <ChatBubble
-              key={message.id}
-              role={message.role}
-              content={message.parts
-                .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                .map((p) => p.text)
-                .join("")}
+          <div className="flex-1 space-y-4 overflow-y-auto">
+            <ChatBubble role="assistant" content={GREETING} />
+            {messages.map((message) => (
+              <ChatBubble
+                key={message.id}
+                role={message.role}
+                content={message.parts
+                  .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                  .map((p) => p.text)
+                  .join("")}
+              />
+            ))}
+            {isLoading && <ChatBubble role="assistant" content="Thinking…" />}
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-6 flex items-center gap-3">
+            <input
+              className="flex-1 rounded-full border px-5 py-3 text-sm outline-none"
+              style={{ borderColor: "var(--border-hairline)", fontFamily: "var(--font-sans)" }}
+              placeholder="Describe your aquaculture operation, or ask a question..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={isLoading}
             />
-          ))}
-          {isLoading && <ChatBubble role="assistant" content="Thinking…" />}
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-6 flex items-center gap-3">
-          <input
-            className="flex-1 rounded-full border px-5 py-3 text-sm outline-none"
-            style={{ borderColor: "var(--border-hairline)", fontFamily: "var(--font-sans)" }}
-            placeholder="Describe your aquaculture operation, or ask a question..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={isLoading}
-          />
-          <Button>{isLoading ? "..." : "SEND"}</Button>
-        </form>
-      </main>
+            <Button>{isLoading ? "..." : "SEND"}</Button>
+          </form>
+        </main>
+      </div>
     </div>
   );
 }
