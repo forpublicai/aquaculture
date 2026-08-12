@@ -1,0 +1,10 @@
+:root{
+--radius-pill:1000px; /* buttons */
+--radius-card:20px; /* nav sheet bottom corners */
+--radius-control:10px; /* square arrow buttons */
+--button-padding:14px 22px;
+--button-height:48px;
+--control-size:40px;
+--nav-height-desktop:148px;
+--content-max-width:1500px;
+}

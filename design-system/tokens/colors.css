@@ -1,0 +1,25 @@
+:root{
+/* Base palette */
+--pai-red:#EF3C24; /* British Rail "Flame Red" */
+--pai-red-hover:#FE6550;
+--pai-black:#000000;
+--pai-white:#FFFFFF;
+--pai-gray-100:#F7F7F7; /* hairline borders, subtle surfaces */
+--pai-gray-400:#929292; /* black-button hover */
+--pai-gray-500:#6F6F6F; /* UI chrome only — not for text */
+--pai-gray-800:#444444;
+--pai-oak:#a97954; /* editorial accent text */
+--pai-leather:#c29b87;
+--pai-parchment:#f6f2ea; /* specimen / canvas background */
+/* Semantic aliases */
+--color-brand:var(--pai-red);
+--color-brand-hover:var(--pai-red-hover);
+--text-primary:var(--pai-black);
+--text-inverse:var(--pai-white);
+--text-accent:var(--pai-oak);
+--surface-page:var(--pai-white);
+--surface-subtle:var(--pai-gray-100);
+--surface-canvas:var(--pai-parchment);
+--border-hairline:var(--pai-gray-100);
+--shadow-nav:0px 2px 4px 0px rgba(0,0,0,0.05);
+}
