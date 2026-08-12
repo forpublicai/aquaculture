@@ -1,0 +1,22 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Office lock files
+~$*
+
+# Node (in case anyone adds tooling later)
+node_modules/
+
+# Claude Code local settings (personal, not shared)
+.claude/settings.local.json
+
+# NB International Pro CG webfonts (assets/fonts/) are licensed from Neubau under a
+# domain-locked, self-hosted webfont EULA that prohibits redistribution or making the
+# files available for download (see README.md "Font licensing"). Keep them local only.
+assets/fonts/

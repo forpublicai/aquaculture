@@ -1,0 +1,259 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/arrows/**",
+              "components/brand/**",
+              "components/buttons/**",
+              "components/navigation/**",
+              "ui_kits/inference-utility/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:NB International Pro CG|NB International Pro Mono|Public Sans|Inter|Overpass|Overpass Mono|Roboto Flex))/i]",
+        "message": "Font not provided by the design system. Available: NB International Pro CG, NB International Pro Mono, Public Sans, Inter, Overpass, Overpass Mono, Roboto Flex."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ArrowLeft'] > JSXAttribute > JSXIdentifier[name!=/^(?:onClick|style|key|ref|className|style|children)$/]",
+        "message": "<ArrowLeft> doesn't accept that prop. Declared props: onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ArrowRight'] > JSXAttribute > JSXIdentifier[name!=/^(?:onClick|style|key|ref|className|style|children)$/]",
+        "message": "<ArrowRight> doesn't accept that prop. Declared props: onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<Button> doesn't accept that prop. Declared props: children, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ButtonLinkout'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|href|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<ButtonLinkout> doesn't accept that prop. Declared props: children, href, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Logo'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|height|assetsBase|style|key|ref|className|style|children)$/]",
+        "message": "<Logo> doesn't accept that prop. Declared props: variant, height, assetsBase, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Logo'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:default|mark|network|inference-utility)$/]",
+        "message": "<Logo> variant must be one of 'default' | 'mark' | 'network' | 'inference-utility'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='LogoMark'] > JSXAttribute > JSXIdentifier[name!=/^(?:height|assetsBase|style|key|ref|className|style|children)$/]",
+        "message": "<LogoMark> doesn't accept that prop. Declared props: height, assetsBase, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Navigation'] > JSXAttribute > JSXIdentifier[name!=/^(?:title|buttonLabel|breakpoint|onButtonClick|style|key|ref|className|style|children)$/]",
+        "message": "<Navigation> doesn't accept that prop. Declared props: title, buttonLabel, breakpoint, onButtonClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Navigation'] > JSXAttribute[name.name='breakpoint'] > Literal[value!=/^(?:desktop|tablet)$/]",
+        "message": "<Navigation> breakpoint must be one of 'desktop' | 'tablet'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='NavigationMobile'] > JSXAttribute > JSXIdentifier[name!=/^(?:title|items|buttonLabel|open|onNavigate|style|key|ref|className|style|children)$/]",
+        "message": "<NavigationMobile> doesn't accept that prop. Declared props: title, items, buttonLabel, open, onNavigate, style."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "ArrowLeft": {
+        "replaces": []
+      },
+      "ArrowRight": {
+        "replaces": []
+      },
+      "Button": {
+        "replaces": []
+      },
+      "ButtonLinkout": {
+        "replaces": []
+      },
+      "Logo": {
+        "replaces": []
+      },
+      "LogoMark": {
+        "replaces": []
+      },
+      "Navigation": {
+        "replaces": []
+      },
+      "NavigationMobile": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--border-hairline",
+      "--button-height",
+      "--button-padding",
+      "--color-brand",
+      "--color-brand-hover",
+      "--content-max-width",
+      "--control-size",
+      "--font-brand",
+      "--font-headline",
+      "--font-micro",
+      "--font-mono",
+      "--font-sans",
+      "--font-ui",
+      "--nav-height-desktop",
+      "--pai-black",
+      "--pai-gray-100",
+      "--pai-gray-400",
+      "--pai-gray-500",
+      "--pai-gray-800",
+      "--pai-leather",
+      "--pai-oak",
+      "--pai-parchment",
+      "--pai-red",
+      "--pai-red-hover",
+      "--pai-white",
+      "--radius-card",
+      "--radius-control",
+      "--radius-pill",
+      "--shadow-nav",
+      "--surface-canvas",
+      "--surface-page",
+      "--surface-subtle",
+      "--text-accent",
+      "--text-inverse",
+      "--text-primary",
+      "--type-body-lh",
+      "--type-body-size",
+      "--type-body-weight",
+      "--type-brand-size",
+      "--type-brand-weight",
+      "--type-button-size",
+      "--type-button-weight",
+      "--type-display-lh",
+      "--type-display-ls",
+      "--type-display-size",
+      "--type-display-weight",
+      "--type-h2-size",
+      "--type-h2-weight",
+      "--type-h3-size",
+      "--type-h3-weight",
+      "--type-micro-ls",
+      "--type-micro-size",
+      "--type-micro-weight",
+      "--type-mono-size",
+      "--type-nav-ls",
+      "--type-nav-size",
+      "--type-nav-weight",
+      "--type-section-size",
+      "--type-section-weight",
+      "--type-ui-size",
+      "--type-ui-weight"
+    ],
+    "tokenKinds": {
+      "--pai-red": "color",
+      "--pai-red-hover": "color",
+      "--pai-black": "color",
+      "--pai-white": "color",
+      "--pai-gray-100": "color",
+      "--pai-gray-400": "color",
+      "--pai-gray-500": "color",
+      "--pai-gray-800": "color",
+      "--pai-oak": "color",
+      "--pai-leather": "color",
+      "--pai-parchment": "color",
+      "--color-brand": "color",
+      "--color-brand-hover": "color",
+      "--text-primary": "font",
+      "--text-inverse": "font",
+      "--text-accent": "font",
+      "--surface-page": "color",
+      "--surface-subtle": "color",
+      "--surface-canvas": "color",
+      "--border-hairline": "color",
+      "--shadow-nav": "shadow",
+      "--font-brand": "font",
+      "--font-sans": "font",
+      "--font-ui": "font",
+      "--font-headline": "font",
+      "--font-mono": "font",
+      "--font-micro": "font",
+      "--type-display-size": "font",
+      "--type-display-weight": "font",
+      "--type-display-lh": "font",
+      "--type-display-ls": "font",
+      "--type-brand-size": "font",
+      "--type-brand-weight": "font",
+      "--type-h2-size": "font",
+      "--type-h2-weight": "font",
+      "--type-h3-size": "font",
+      "--type-h3-weight": "font",
+      "--type-section-size": "font",
+      "--type-section-weight": "font",
+      "--type-ui-size": "font",
+      "--type-ui-weight": "font",
+      "--type-body-size": "font",
+      "--type-body-weight": "font",
+      "--type-body-lh": "font",
+      "--type-button-size": "font",
+      "--type-button-weight": "font",
+      "--type-mono-size": "font",
+      "--type-micro-size": "font",
+      "--type-micro-weight": "font",
+      "--type-micro-ls": "font",
+      "--type-nav-size": "font",
+      "--type-nav-weight": "font",
+      "--type-nav-ls": "font",
+      "--radius-pill": "radius",
+      "--radius-card": "radius",
+      "--radius-control": "radius",
+      "--button-padding": "spacing",
+      "--button-height": "spacing",
+      "--control-size": "spacing",
+      "--nav-height-desktop": "spacing",
+      "--content-max-width": "spacing"
+    },
+    "fontFamilies": [
+      "Inter",
+      "NB International Pro CG",
+      "NB International Pro Mono",
+      "Overpass",
+      "Overpass Mono",
+      "Public Sans",
+      "Roboto Flex"
+    ]
+  }
+}
