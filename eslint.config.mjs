@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored subtree (not our code, has its own conventions) — also
+    // avoids a symlink cycle via .claude/skills/public-ai-design, which
+    // points back into this same directory.
+    "design-system/**",
+    ".claude/**",
+    "streamlit-poc/**",
   ]),
 ]);
 

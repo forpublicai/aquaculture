@@ -1,1 +1,21 @@
+/* Public AI design tokens — imported directly (not via design-system/styles.css)
+   because that file's relative url() imports resolve against the importer's
+   location, not its own, once bundled.
+   Import order matters: typography.css's own internal @import (Google Fonts)
+   must end up first in Turbopack's flattened output, so it's imported before
+   colors.css/shape.css even though alphabetically later.
+   tokens/fonts.css is deliberately NOT imported: it declares @font-face for
+   NB International Pro CG, whose webfont files aren't in the repo (license
+   restriction — see design-system/README.md). Turbopack treats a missing
+   local url() asset as a hard build error, unlike a browser's soft fallback.
+   --font-brand already lists 'Overpass' (loaded via Google Fonts here) as
+   its fallback, so brand text still renders correctly without the real font. */
+@import "../design-system/tokens/typography.css";
+@import "../design-system/tokens/colors.css";
+@import "../design-system/tokens/shape.css";
 @import "tailwindcss";
+
+body {
+  background: var(--surface-page);
+  color: var(--text-primary);
+}
