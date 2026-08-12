@@ -1,0 +1,25 @@
+# --- Frontend ---
+streamlit>=1.38.0
+
+# --- LLM orchestration ---
+# ChatOpenAI (OpenAI-compatible client) is used against OpenRouter's API
+# rather than langchain-anthropic, since requests are routed through
+# OpenRouter — see src/config.py.
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-community>=0.3.0
+langchain-huggingface>=0.1.0
+
+# --- Vector store (Feature B: RAG) ---
+langchain-chroma>=0.1.4
+chromadb>=0.5.5
+
+# --- Embeddings (local, no external API key required for the POC) ---
+sentence-transformers>=3.0.1
+
+# --- Document ingestion (regulatory PDFs / text) ---
+pypdf>=4.3.1
+unstructured>=0.15.0
+
+# --- Config / env ---
+python-dotenv>=1.0.1
