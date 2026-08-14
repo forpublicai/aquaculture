@@ -12,8 +12,9 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { config } from "dotenv";
-config({ path: ".env.local" });
+// Must be the first import: it populates process.env from .env.local before
+// the Supabase and OpenRouter clients below are constructed at import time.
+import "./load-env";
 
 import { embedMany } from "ai";
 import { PDFParse } from "pdf-parse";
@@ -23,6 +24,13 @@ import { chunkText } from "@/lib/rag/chunk";
 import { supabase } from "@/lib/supabase";
 
 const KNOWLEDGE_BASE_DIR = path.join(process.cwd(), "data", "knowledge_base");
+
+/**
+ * Bookkeeping files that live in data/knowledge_base/ but are not regulatory
+ * source material. Without this, SOURCES.md gets chunked and indexed, and the
+ * assistant can end up citing our own notes as if they were DMR guidance.
+ */
+const NOT_SOURCE_MATERIAL = new Set(["sources.md", "readme.md"]);
 
 interface LoadedDocument {
   source: string;
@@ -54,6 +62,7 @@ async function loadDocuments(dir: string): Promise<LoadedDocument[]> {
     const filePath = path.join(dir, entry);
     const ext = path.extname(entry).toLowerCase();
     const source = entry;
+    if (NOT_SOURCE_MATERIAL.has(path.basename(entry).toLowerCase())) continue;
     try {
       if (ext === ".pdf") documents.push(await loadPdf(filePath, source));
       else if (ext === ".txt" || ext === ".md") documents.push(await loadText(filePath, source));

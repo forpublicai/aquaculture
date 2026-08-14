@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "kb:status": "tsx scripts/kb-status.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.65",

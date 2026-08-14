@@ -7,6 +7,7 @@
 import { embed, streamText, toUIMessageStream, type UIMessageStreamWriter } from "ai";
 
 import { chatModel, embeddingModel } from "@/lib/openrouter";
+import { describeSource } from "@/lib/rag/catalog";
 import { supabase } from "@/lib/supabase";
 
 export const EMPTY_KB_MESSAGE =
@@ -23,8 +24,11 @@ If the context doesn't contain enough information to answer confidently, say \
 so plainly and suggest the applicant check with DMR directly. Never present \
 a guess as a confirmed regulatory requirement.
 
-When you do answer from the context, keep it concise and cite which document \
-the information came from.
+When you do answer from the context, keep it concise and cite your sources \
+using the exact markdown link given on the "cite as:" line of each context \
+document — for example [DMR: LPA and Lease Requirements](https://www.maine.gov/...). \
+Never cite a bare filename, and never write a URL that does not appear in the \
+context below.
 
 Context:
 {context}`;
@@ -34,7 +38,13 @@ interface DocumentChunk {
   metadata: { source?: string; page?: number };
 }
 
-async function retrieve(question: string, k = 4): Promise<DocumentChunk[]> {
+/**
+ * `k` is deliberately generous: chunks are ~1000 characters, and comparison
+ * questions ("LPA vs standard lease") need passages from several documents at
+ * once. At k=4 a single wordy application form filled every slot and crowded
+ * out the regulations. Ten chunks is still only ~10k characters of context.
+ */
+async function retrieve(question: string, k = 10): Promise<DocumentChunk[]> {
   const { embedding } = await embed({ model: embeddingModel, value: question });
   const { data, error } = await supabase.rpc("match_document_chunks", {
     query_embedding: embedding,
@@ -47,10 +57,14 @@ async function retrieve(question: string, k = 4): Promise<DocumentChunk[]> {
 function formatContext(chunks: DocumentChunk[]): string {
   return chunks
     .map((chunk, i) => {
-      const source = chunk.metadata.source ?? "unknown source";
+      const { title, url } = describeSource(chunk.metadata.source);
       const page = chunk.metadata.page;
-      const label = `[${i + 1}] ${source}` + (page !== undefined ? ` (page ${page + 1})` : "");
-      return `${label}\n${chunk.content}`;
+      const label = `[${i + 1}] ${title}` + (page !== undefined ? ` (page ${page + 1})` : "");
+      // Handing the model a ready-made markdown link is deliberate: it removes
+      // any need for the model to reconstruct a URL, which is where citation
+      // hallucination usually creeps in.
+      const citation = url ? `[${title}](${url})` : title;
+      return `${label}\ncite as: ${citation}\n\n${chunk.content}`;
     })
     .join("\n\n---\n\n");
 }
@@ -76,6 +90,8 @@ export async function answerQuestion(
   });
   writer.merge(toUIMessageStream({ stream: result.fullStream }));
 
-  const sources = [...new Set(chunks.map((c) => c.metadata.source ?? "unknown source"))].sort();
+  const sources = [
+    ...new Set(chunks.map((c) => describeSource(c.metadata.source).title)),
+  ].sort();
   return { sources };
 }

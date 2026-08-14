@@ -188,7 +188,24 @@ function ChatBubble({ role, content }: { role: string; content: string }) {
         fontFamily: "var(--font-sans)",
       }}
     >
-      <ReactMarkdown>{content}</ReactMarkdown>
+      <ReactMarkdown
+        components={{
+          // Citations are links to DMR documents — open them in a new tab so a
+          // user reading a source doesn't lose their place in the conversation.
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }
