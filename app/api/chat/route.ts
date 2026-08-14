@@ -1,11 +1,8 @@
-import { randomUUID } from "node:crypto";
-
 import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } from "ai";
-import { cookies } from "next/headers";
 
 import { handleMessage, loadConversation, saveConversation } from "@/lib/chat/session";
-
-const SESSION_COOKIE = "aquaculture_session";
+import { generateTitle } from "@/lib/chat/title";
+import { getOrCreateUserId } from "@/lib/chat/user";
 
 function latestUserText(messages: UIMessage[]): string {
   const last = messages[messages.length - 1];
@@ -17,21 +14,21 @@ function latestUserText(messages: UIMessage[]): string {
 }
 
 export async function POST(req: Request) {
-  const { messages } = (await req.json()) as { messages: UIMessage[] };
+  const { messages, conversationId } = (await req.json()) as {
+    messages: UIMessage[];
+    conversationId?: string;
+  };
 
-  const cookieStore = await cookies();
-  let sessionId = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!sessionId) {
-    sessionId = randomUUID();
-    cookieStore.set(SESSION_COOKIE, sessionId, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 30,
-    });
+  if (!conversationId) {
+    return new Response("conversationId is required", { status: 400 });
   }
 
-  const conversation = await loadConversation(sessionId);
+  const userId = await getOrCreateUserId();
+  const conversation = await loadConversation(userId, conversationId);
+  if (!conversation) {
+    return new Response("Conversation not found", { status: 404 });
+  }
+
   const userText = latestUserText(messages);
 
   // Holds the state this turn produced, so the onEnd callback can save it
@@ -47,7 +44,9 @@ export async function POST(req: Request) {
       updated = await handleMessage(conversation, userText, writer);
     },
     onEnd: async ({ messages: transcript }) => {
-      await saveConversation({ ...updated, messages: transcript });
+      // Title the conversation from its opening message, once.
+      const title = updated.title ?? (userText ? await generateTitle(userText) : null);
+      await saveConversation({ ...updated, title, messages: transcript });
     },
   });
 

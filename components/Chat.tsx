@@ -2,12 +2,13 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import ReactMarkdown from "react-markdown";
 
 import { Logo } from "@/design-system/components/brand/Logo";
 import { Button } from "@/design-system/components/buttons/Button";
+import type { ConversationSummary } from "@/lib/chat/session";
 import type { OperationProfile, RoutingResult } from "@/lib/routing/schema";
 
 const GREETING =
@@ -21,7 +22,123 @@ const FIELD_LABELS: { key: keyof OperationProfile; label: string }[] = [
   { key: "leaseDurationYears", label: "Lease duration (years)" },
 ];
 
-function ProfileSidebar({
+const HAIRLINE = "var(--border-hairline)";
+const MUTED = "var(--pai-gray-800)";
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2
+      className="mb-3"
+      style={{
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--type-section-size)",
+        fontWeight: "var(--type-section-weight)" as unknown as number,
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+function ConversationList({
+  conversations,
+  activeId,
+  onSelect,
+  onCreate,
+  onDelete,
+}: {
+  conversations: ConversationSummary[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  onDelete: (id: string) => void;
+}) {
+  // Deleting is confirmed inline rather than with a browser dialog: the row
+  // itself turns into "Delete? / Cancel", so nothing is destroyed on one click
+  // and nothing blocks the page.
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <SectionHeading>Conversations</SectionHeading>
+        <button
+          onClick={onCreate}
+          className="rounded-full border px-3 py-1 text-xs"
+          style={{ borderColor: HAIRLINE }}
+          title="Start a new conversation"
+        >
+          + New
+        </button>
+      </div>
+
+      {conversations.length === 0 ? (
+        <p className="text-sm" style={{ color: MUTED }}>
+          No conversations yet.
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {conversations.map((conversation) => {
+            const isActive = conversation.id === activeId;
+            const isPending = pendingDelete === conversation.id;
+
+            return (
+              <li key={conversation.id}>
+                {isPending ? (
+                  <div
+                    className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs"
+                    style={{ background: "var(--surface-subtle)" }}
+                  >
+                    <span>Delete this chat?</span>
+                    <span className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => {
+                          setPendingDelete(null);
+                          onDelete(conversation.id);
+                        }}
+                        className="underline"
+                      >
+                        Delete
+                      </button>
+                      <button onClick={() => setPendingDelete(null)} style={{ color: MUTED }}>
+                        Cancel
+                      </button>
+                    </span>
+                  </div>
+                ) : (
+                  <div
+                    className="group flex items-center justify-between gap-1 rounded px-2 py-1.5"
+                    style={{ background: isActive ? "var(--surface-subtle)" : undefined }}
+                  >
+                    <button
+                      onClick={() => onSelect(conversation.id)}
+                      className="flex-1 truncate text-left text-sm"
+                      style={{ fontWeight: isActive ? 600 : 400 }}
+                      title={conversation.title}
+                    >
+                      {conversation.title}
+                    </button>
+                    <button
+                      onClick={() => setPendingDelete(conversation.id)}
+                      className="shrink-0 px-1 text-xs opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                      style={{ color: MUTED }}
+                      aria-label={`Delete ${conversation.title}`}
+                      title="Delete"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ProfilePanel({
   profile,
   routing,
 }: {
@@ -29,17 +146,8 @@ function ProfileSidebar({
   routing: RoutingResult | null;
 }) {
   return (
-    <aside className="w-full shrink-0 border-r p-6 md:w-72" style={{ borderColor: "var(--border-hairline)" }}>
-      <h2
-        className="mb-4"
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "var(--type-section-size)",
-          fontWeight: "var(--type-section-weight)" as unknown as number,
-        }}
-      >
-        Application profile
-      </h2>
+    <div>
+      <SectionHeading>Application profile</SectionHeading>
       <dl className="space-y-3 text-sm">
         {FIELD_LABELS.map(({ key, label }) => {
           const value = profile?.[key];
@@ -47,14 +155,14 @@ function ProfileSidebar({
           return (
             <div key={key}>
               <dt className="font-semibold">{label}</dt>
-              <dd className="italic" style={{ color: "var(--pai-gray-800)" }}>
+              <dd className="italic" style={{ color: MUTED }}>
                 {display ? display : "not yet provided"}
               </dd>
             </div>
           );
         })}
       </dl>
-      <hr className="my-5" style={{ borderColor: "var(--border-hairline)" }} />
+      <hr className="my-5" style={{ borderColor: HAIRLINE }} />
       {routing && routing.licenseType !== "Undetermined — more information needed" ? (
         <div
           className="rounded p-3 text-sm font-semibold"
@@ -63,73 +171,147 @@ function ProfileSidebar({
           Recommended: {routing.licenseType}
         </div>
       ) : (
-        <div className="text-sm" style={{ color: "var(--pai-gray-800)" }}>
+        <div className="text-sm" style={{ color: MUTED }}>
           Still gathering details to recommend a license type.
         </div>
       )}
-    </aside>
+    </div>
   );
 }
 
 export function Chat() {
   const [input, setInput] = useState("");
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [profile, setProfile] = useState<OperationProfile | null>(null);
   const [routing, setRouting] = useState<RoutingResult | null>(null);
 
-  const { messages, sendMessage, setMessages, status } = useChat({
+  const { messages, sendMessage, setMessages, regenerate, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
     onFinish: () => {
-      refreshProfile();
+      refreshActiveConversation();
+      refreshList();
     },
   });
 
-  async function refreshProfile() {
-    const res = await fetch("/api/conversation");
+  const refreshList = useCallback(async () => {
+    const res = await fetch("/api/conversations");
+    const data = await res.json();
+    setConversations(data.conversations ?? []);
+  }, []);
+
+  const refreshActiveConversation = useCallback(async () => {
+    if (!activeId) return;
+    const res = await fetch(`/api/conversation?id=${encodeURIComponent(activeId)}`);
     const data = await res.json();
     setProfile(data.profile);
     setRouting(data.routing);
-  }
+  }, [activeId]);
 
-  // On first mount, pull the saved conversation back out of the database so
-  // a page refresh doesn't lose the transcript. The ref guard keeps this to
-  // exactly one run even under React's development double-render.
-  const hasRestored = useRef(false);
+  // Bootstrap: load the chat list, creating a first conversation if this
+  // browser has none. The ref guard keeps this to one run under React's
+  // development double-render.
+  const bootstrapped = useRef(false);
   useEffect(() => {
-    if (hasRestored.current) return;
-    hasRestored.current = true;
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+
     (async () => {
-      const res = await fetch("/api/conversation");
+      const res = await fetch("/api/conversations");
       const data = await res.json();
+      const existing: ConversationSummary[] = data.conversations ?? [];
+
+      if (existing.length > 0) {
+        setConversations(existing);
+        setActiveId(existing[0].id);
+        return;
+      }
+
+      const created = await fetch("/api/conversations", { method: "POST" });
+      const { conversation } = await created.json();
+      setConversations([conversation]);
+      setActiveId(conversation.id);
+    })();
+  }, []);
+
+  // Whenever the active conversation changes, swap in its transcript and
+  // profile. Switching to a brand-new chat clears the message list.
+  useEffect(() => {
+    if (!activeId) return;
+    let cancelled = false;
+
+    (async () => {
+      const res = await fetch(`/api/conversation?id=${encodeURIComponent(activeId)}`);
+      const data = await res.json();
+      if (cancelled) return;
       setProfile(data.profile);
       setRouting(data.routing);
-      if (Array.isArray(data.messages) && data.messages.length > 0) {
-        setMessages(data.messages);
-      }
+      setMessages(Array.isArray(data.messages) ? data.messages : []);
     })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeId]);
+
+  async function handleCreate() {
+    const res = await fetch("/api/conversations", { method: "POST" });
+    const { conversation } = await res.json();
+    setConversations((prev) => [conversation, ...prev]);
+    setActiveId(conversation.id);
+  }
+
+  async function handleDelete(id: string) {
+    await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const remaining = conversations.filter((c) => c.id !== id);
+    setConversations(remaining);
+
+    if (id !== activeId) return;
+    // The open chat was the one deleted, so move somewhere valid — the next
+    // conversation, or a fresh one if that was the last.
+    if (remaining.length > 0) setActiveId(remaining[0].id);
+    else await handleCreate();
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
-    sendMessage({ text: input });
+    if (!input.trim() || !activeId) return;
+    sendMessage({ text: input }, { body: { conversationId: activeId } });
     setInput("");
   }
 
   const isLoading = status === "submitted" || status === "streaming";
+  const lastMessage = messages[messages.length - 1];
+  const canRegenerate = !isLoading && lastMessage?.role === "assistant" && Boolean(activeId);
 
   return (
     <div className="flex min-h-screen flex-col">
       <header
         className="flex items-center px-6 py-4"
-        style={{ borderBottom: "1px solid var(--border-hairline)" }}
+        style={{ borderBottom: `1px solid ${HAIRLINE}` }}
       >
         <a href="https://publicai.co" target="_blank" rel="noreferrer">
           <Logo height={28} assetsBase="/assets" />
         </a>
       </header>
+
       <div className="flex flex-1 flex-col md:flex-row">
-        <ProfileSidebar profile={profile} routing={routing} />
+        <aside
+          className="w-full shrink-0 border-r p-6 md:w-72"
+          style={{ borderColor: HAIRLINE }}
+        >
+          <ConversationList
+            conversations={conversations}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onCreate={handleCreate}
+            onDelete={handleDelete}
+          />
+          <hr className="my-6" style={{ borderColor: HAIRLINE }} />
+          <ProfilePanel profile={profile} routing={routing} />
+        </aside>
+
         <main className="flex flex-1 flex-col p-6">
           <h1
             style={{
@@ -140,7 +322,7 @@ export function Chat() {
           >
             Maine Aquaculture License Assistant
           </h1>
-          <p className="mb-6 mt-2 max-w-2xl text-sm" style={{ color: "var(--pai-gray-800)" }}>
+          <p className="mb-6 mt-2 max-w-2xl text-sm" style={{ color: MUTED }}>
             Conversational assistant for Maine aquaculture license triage and regulatory Q&amp;A.
             Proof of concept — not a substitute for DMR guidance.
           </p>
@@ -158,16 +340,27 @@ export function Chat() {
               />
             ))}
             {isLoading && <ChatBubble role="assistant" content="Thinking…" />}
+
+            {canRegenerate && (
+              <button
+                onClick={() => regenerate({ body: { conversationId: activeId } })}
+                className="rounded-full border px-3 py-1 text-xs"
+                style={{ borderColor: HAIRLINE, color: MUTED }}
+                title="Discard that answer and try again"
+              >
+                ↻ Regenerate
+              </button>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 flex items-center gap-3">
             <input
               className="flex-1 rounded-full border px-5 py-3 text-sm outline-none"
-              style={{ borderColor: "var(--border-hairline)", fontFamily: "var(--font-sans)" }}
+              style={{ borderColor: HAIRLINE, fontFamily: "var(--font-sans)" }}
               placeholder="Describe your aquaculture operation, or ask a question..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              disabled={isLoading}
+              disabled={isLoading || !activeId}
             />
             <Button>{isLoading ? "..." : "SEND"}</Button>
           </form>
