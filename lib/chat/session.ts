@@ -3,7 +3,7 @@
  * applicant can leave and resume), and routes each message to the
  * license-triage interview or regulatory Q&A based on intent.
  */
-import type { UIMessageStreamWriter } from "ai";
+import type { UIMessage, UIMessageStreamWriter } from "ai";
 
 import { classifyIntent } from "@/lib/chat/intent";
 import { writeStaticText } from "@/lib/chat/respond";
@@ -17,19 +17,29 @@ export interface ConversationState {
   id: string;
   profile: OperationProfile;
   routing: RoutingResult;
+  /** Full chat transcript, in the wire format useChat renders directly. */
+  messages: UIMessage[];
 }
 
 export async function loadConversation(sessionId: string): Promise<ConversationState> {
   const { data, error } = await supabase
     .from("conversations")
-    .select("id, profile, routing")
+    .select("id, profile, routing, messages")
     .eq("id", sessionId)
     .maybeSingle();
   if (error) throw new Error(`Failed to load conversation: ${error.message}`);
   if (!data) {
-    return { id: sessionId, profile: EMPTY_PROFILE, routing: UNDETERMINED_ROUTING };
+    return {
+      id: sessionId,
+      profile: EMPTY_PROFILE,
+      routing: UNDETERMINED_ROUTING,
+      messages: [],
+    };
   }
-  return data as ConversationState;
+  return {
+    ...(data as ConversationState),
+    messages: (data.messages as UIMessage[] | null) ?? [],
+  };
 }
 
 export async function saveConversation(state: ConversationState): Promise<void> {
@@ -37,6 +47,7 @@ export async function saveConversation(state: ConversationState): Promise<void> 
     id: state.id,
     profile: state.profile,
     routing: state.routing,
+    messages: state.messages,
     updated_at: new Date().toISOString(),
   });
   if (error) throw new Error(`Failed to save conversation: ${error.message}`);
