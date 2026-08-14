@@ -10,9 +10,13 @@
 
 create extension if not exists vector;
 
--- One row per anonymous chat session (id = a random token in a cookie).
+-- One row per conversation. `user_id` is an anonymous per-browser token held
+-- in a cookie; a browser may own many conversations. `title` is derived from
+-- the first user message and is null until that message arrives.
 create table if not exists conversations (
   id text primary key,
+  user_id text,
+  title text,
   profile jsonb not null default '{}'::jsonb,
   routing jsonb not null default '{}'::jsonb,
   messages jsonb not null default '[]'::jsonb,
@@ -21,6 +25,10 @@ create table if not exists conversations (
 );
 
 alter table conversations enable row level security;
+
+-- The chat list query: "this browser's conversations, most recent first."
+create index if not exists conversations_user_updated_idx
+  on conversations (user_id, updated_at desc);
 
 -- Regulatory document chunks for RAG. Populated by scripts/ingest.ts.
 -- Dimension 1536 matches OpenRouter's openai/text-embedding-3-small.
