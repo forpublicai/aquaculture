@@ -1,0 +1,102 @@
+{
+  "LPA_Application.pdf": {
+    "kind": "pdf",
+    "title": "LPA License Application (rev. 03/2026)",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/LPA_Application_March%202026_0.pdf"
+  },
+  "LPA_Process_Flow_Chart.pdf": {
+    "kind": "pdf",
+    "title": "LPA License Process Flow Chart",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/LPA%20License%20Process%20Flow%20Chart.pdf"
+  },
+  "Experimental_Lease_Application.pdf": {
+    "kind": "pdf",
+    "title": "Experimental Lease Application",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/EXPERIMENTAL_application_2.pdf"
+  },
+  "Experimental_Lease_Instructions.pdf": {
+    "kind": "pdf",
+    "title": "Experimental Lease Application Instructions",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/EXPERIMENTAL_Application%20Instructions_1.pdf"
+  },
+  "Experimental_Lease_Process_Flow_Chart.pdf": {
+    "kind": "pdf",
+    "title": "Experimental Lease Process Flow Chart",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/Experimental%20Lease%20Process%20Flow%20Chart.pdf"
+  },
+  "Standard_Lease_Draft_Application.pdf": {
+    "kind": "pdf",
+    "title": "Standard Lease — Draft Application",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/STANDARD_Draft_application-nondischarge_0_1.pdf"
+  },
+  "Standard_Lease_Draft_Instructions.pdf": {
+    "kind": "pdf",
+    "title": "Standard Lease — Draft Application Instructions",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/STANDARD_Draft_Application%20Instructions%20_0.pdf"
+  },
+  "Standard_Lease_Final_Application.pdf": {
+    "kind": "pdf",
+    "title": "Standard Lease — Final Application",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/STANDARD_Final_application-nondischarge_0_1.pdf"
+  },
+  "Standard_Lease_Final_Instructions.pdf": {
+    "kind": "pdf",
+    "title": "Standard Lease — Final Application Instructions",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/STANDARD_Final_Application%20Instructions_2.pdf"
+  },
+  "Standard_Lease_Process_Flow_Chart.pdf": {
+    "kind": "pdf",
+    "title": "Standard Lease Process Flow Chart",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/Standard%20Lease%20Process%20Flow%20Chart.pdf"
+  },
+  "Common_Application_Mistakes.pdf": {
+    "kind": "pdf",
+    "title": "DMR: Common Application Mistakes",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/CommonApplicationMistakes.pdf"
+  },
+  "Chapter2_Aquaculture_Lease_Regulations.pdf": {
+    "kind": "pdf",
+    "title": "DMR Chapter 2 — Aquaculture Lease Regulations",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/regulations-2023-08/Chapter2_RRMAPA4_for%20web_0.pdf"
+  },
+  "Riparian_Owners_List_Form.pdf": {
+    "kind": "pdf",
+    "title": "Riparian Owners List Form",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/Riparian_Owners_list_04.10.2019.pdf"
+  },
+  "DMR_LPA_and_Lease_Requirements.txt": {
+    "kind": "page",
+    "title": "DMR: LPA and Lease Requirements",
+    "url": "https://www.maine.gov/dmr/aquaculture/aquaculture-lpa-and-lease-requirements"
+  },
+  "DMR_Public_Participation_in_Leasing.txt": {
+    "kind": "page",
+    "title": "DMR: Public Participation in Aquaculture Leasing",
+    "url": "https://www.maine.gov/dmr/aquaculture/public-participation-in-aquaculture-leasing"
+  },
+  "DMR_Applications_and_Forms_Overview.txt": {
+    "kind": "page",
+    "title": "DMR: Aquaculture Applications and Forms",
+    "url": "https://www.maine.gov/dmr/aquaculture/applications-and-forms"
+  },
+  "Statute_12MRS_6072_Leases.txt": {
+    "kind": "page",
+    "title": "12 M.R.S. §6072 — Research and Aquaculture Leases",
+    "url": "https://legislature.maine.gov/statutes/12/title12sec6072.html"
+  },
+  "Statute_12MRS_6072-A_Limited_Purpose_Lease.txt": {
+    "kind": "page",
+    "title": "12 M.R.S. §6072-A — Limited-Purpose (Experimental) Lease",
+    "url": "https://legislature.maine.gov/statutes/12/title12sec6072-A.html"
+  },
+  "Statute_12MRS_6072-C_LPA_License.txt": {
+    "kind": "page",
+    "title": "12 M.R.S. §6072-C — Limited-Purpose Aquaculture License",
+    "url": "https://legislature.maine.gov/statutes/12/title12sec6072-C.html"
+  },
+  "Statute_12MRS_6073_Exclusivity.txt": {
+    "kind": "page",
+    "title": "12 M.R.S. §6073 — Exclusivity; Prohibition on Interference",
+    "url": "https://legislature.maine.gov/statutes/12/title12sec6073.html"
+  }
+}

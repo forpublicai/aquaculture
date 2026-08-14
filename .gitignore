@@ -26,6 +26,7 @@ env/
 **/data/vector_store/
 **/data/knowledge_base/*
 !**/data/knowledge_base/.gitkeep
+!**/data/knowledge_base/SOURCES.md
 .streamlit/secrets.toml
 .pytest_cache/
 .mypy_cache/
