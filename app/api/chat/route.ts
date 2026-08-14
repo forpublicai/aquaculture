@@ -34,10 +34,20 @@ export async function POST(req: Request) {
   const conversation = await loadConversation(sessionId);
   const userText = latestUserText(messages);
 
+  // Holds the state this turn produced, so the onEnd callback can save it
+  // alongside the transcript in a single write.
+  let updated = conversation;
+
   const stream = createUIMessageStream({
+    // Passing the client's messages puts the stream in "persistence mode":
+    // onEnd then receives the complete transcript (this user turn plus the
+    // assistant reply we just streamed), which is what we store.
+    originalMessages: messages,
     execute: async ({ writer }) => {
-      const updated = await handleMessage(conversation, userText, writer);
-      await saveConversation(updated);
+      updated = await handleMessage(conversation, userText, writer);
+    },
+    onEnd: async ({ messages: transcript }) => {
+      await saveConversation({ ...updated, messages: transcript });
     },
   });
 

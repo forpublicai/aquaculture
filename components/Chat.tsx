@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import ReactMarkdown from "react-markdown";
 
@@ -76,7 +76,7 @@ export function Chat() {
   const [profile, setProfile] = useState<OperationProfile | null>(null);
   const [routing, setRouting] = useState<RoutingResult | null>(null);
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, setMessages, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
     onFinish: () => {
       refreshProfile();
@@ -90,8 +90,23 @@ export function Chat() {
     setRouting(data.routing);
   }
 
+  // On first mount, pull the saved conversation back out of the database so
+  // a page refresh doesn't lose the transcript. The ref guard keeps this to
+  // exactly one run even under React's development double-render.
+  const hasRestored = useRef(false);
   useEffect(() => {
-    refreshProfile();
+    if (hasRestored.current) return;
+    hasRestored.current = true;
+    (async () => {
+      const res = await fetch("/api/conversation");
+      const data = await res.json();
+      setProfile(data.profile);
+      setRouting(data.routing);
+      if (Array.isArray(data.messages) && data.messages.length > 0) {
+        setMessages(data.messages);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleSubmit(e: React.FormEvent) {
