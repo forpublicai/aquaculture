@@ -9,6 +9,11 @@
     "title": "LPA License Process Flow Chart",
     "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/inline-files/LPA%20License%20Process%20Flow%20Chart.pdf"
   },
+  "LPA_Health_Zones.pdf": {
+    "kind": "pdf",
+    "title": "DMR: LPA License Health Zones (Rule Chapter 2.05(1)(J))",
+    "url": "https://www.maine.gov/dmr/sites/maine.gov.dmr/files/docs/lpahealthzones.pdf"
+  },
   "Experimental_Lease_Application.pdf": {
     "kind": "pdf",
     "title": "Experimental Lease Application",
@@ -68,6 +73,11 @@
     "kind": "page",
     "title": "DMR: LPA and Lease Requirements",
     "url": "https://www.maine.gov/dmr/aquaculture/aquaculture-lpa-and-lease-requirements"
+  },
+  "DMR_LPA_License_Information.txt": {
+    "kind": "page",
+    "title": "DMR: LPA License Information (health zones and stock sourcing)",
+    "url": "https://www.maine.gov/dmr/aquaculture/resources-for-growers/LPAinformation"
   },
   "DMR_Public_Participation_in_Leasing.txt": {
     "kind": "page",

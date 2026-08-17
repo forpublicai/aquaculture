@@ -19,7 +19,7 @@ plus the applicant's latest message. Return the FULL set of fields:
 - Leave a field null if it has never been mentioned.
 - Convert acres to square feet (1 acre = 43,560 sq ft) for siteAreaSqFt.
 - Only set isFirstTimeApplicant or wantsToTestBeforeCommitting when the \
-applicant has actually said something that implies it — don't guess.
+applicant has actually said something that implies it. Don't guess.
 
 Do not ask questions yourself here; you are only extracting data.`;
 
@@ -54,7 +54,7 @@ export function formatRecommendation(routing: RoutingResult): string {
   }
   lines.push(
     "",
-    "This is a preliminary read, not a final determination — feel free to ask me " +
+    "This is a preliminary read, not a final determination. Feel free to ask me " +
       "regulatory questions about this license type, or double-check details with DMR " +
       "directly before applying."
   );
