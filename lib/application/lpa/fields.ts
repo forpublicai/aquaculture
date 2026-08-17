@@ -126,7 +126,13 @@ export interface LpaFieldDef {
    */
   emptyListIsAnswer?: boolean;
   /** Composite objects need their own notion of "filled in". */
-  kind?: "use_observation";
+  kind?: "use_observation" | "stock_list";
+  /**
+   * For a `stock_list`, the property every record must carry before the field
+   * counts as answered. Naming a species is enough to record it, but not enough
+   * to file it: the form wants the source alongside.
+   */
+  entryRequires?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -432,18 +438,22 @@ export const LPA_FIELDS: LpaFieldDef[] = [
   {
     key: "hatcheryStock",
     section: "species_stock",
+    kind: "stock_list",
+    entryRequires: "hatcheryName",
     label: "Hatchery-sourced species",
     question:
-      "Which species will you source from a DMR-approved hatchery, and what's the hatchery's name, address, and phone number?",
-    hint: "Quahog, surf clams, soft-shell clam, razor clam, European oyster and bay scallop can only come from an approved hatchery.",
+      "Which species will you source from a DMR-approved hatchery, and what's the hatchery's name, address, and phone number? The form covers blue mussel, eastern oyster, quahog, soft-shelled clam, Atlantic and Arctic surf clam, razor clam, green sea urchin, bay scallop, sugar, skinny, horsetail and winged kelp, dulse, and European oyster.",
+    hint: "Quahog, surf clams, soft-shelled clam, razor clam, European oyster and bay scallop can only come from an approved hatchery. There's no approved European oyster hatchery at present.",
     emptyListIsAnswer: true,
   },
   {
     key: "wildStock",
     section: "species_stock",
+    kind: "stock_list",
+    entryRequires: "waterbody",
     label: "Wild-sourced species",
     question:
-      "Will you source anything from the wild or another aquaculture site? If so, which species, from which waterbody and health zone, and who's the licensed harvester?",
+      "Will you source anything from the wild or another aquaculture site? Only blue mussel, eastern oyster, sea scallop, green sea urchin and marine algae may be taken from the wild. If so, which species, from which waterbody and health zone, and who's the licensed harvester?",
     hint: "Wild stock must come from the same health zone as your LPA. American oysters can't come from the Damariscotta, Sheepscot, or Quahog Bay.",
     emptyListIsAnswer: true,
   },
@@ -461,8 +471,9 @@ export const LPA_FIELDS: LpaFieldDef[] = [
     label: "Scallop adductor-only",
     question:
       "Can you confirm that scallops grown here will be sold adductor-only, given that roe-on and whole scallop sales are prohibited on an LPA?",
-    // Entries here are model-extracted and round-trip through JSONB, so this
-    // reads defensively rather than trusting the schema's shape at runtime.
+    // Matches the enum keys 'bay_scallop' and 'sea_scallop'. Entries are
+    // model-extracted and round-trip through JSONB, so this reads defensively
+    // rather than trusting the schema's shape at runtime.
     appliesWhen: (app) =>
       [...(app.hatcheryStock ?? []), ...(app.wildStock ?? [])].some((entry) =>
         typeof entry?.species === "string" && entry.species.toLowerCase().includes("scallop")
@@ -679,11 +690,32 @@ function isUseObservationAnswered(value: UseObservation | null): boolean {
   return Object.values(value).every((part) => typeof part === "string" && part.trim() !== "");
 }
 
+/**
+ * A stock list is answered when every species in it also names its source. This
+ * matters because the extraction model is now told to record a species the
+ * moment it hears one, before the applicant has said where it comes from. That
+ * partial record must not be mistaken for a finished answer, or the interview
+ * would move on and the form would go out with a blank hatchery column.
+ */
+function isStockListAnswered(field: LpaFieldDef, value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  if (value.length === 0) return Boolean(field.emptyListIsAnswer);
+  const required = field.entryRequires;
+  if (!required) return true;
+  return value.every((entry) => {
+    const source = (entry as Record<string, unknown> | null)?.[required];
+    return typeof source === "string" && source.trim() !== "";
+  });
+}
+
 export function fieldAnswered(field: LpaFieldDef, app: LpaApplication): boolean {
   const value = app[field.key];
 
   if (field.kind === "use_observation") {
     return isUseObservationAnswered(value as UseObservation | null);
+  }
+  if (field.kind === "stock_list") {
+    return isStockListAnswered(field, value);
   }
   if (value === null || value === undefined) return false;
   if (Array.isArray(value)) return field.emptyListIsAnswer ? true : value.length > 0;

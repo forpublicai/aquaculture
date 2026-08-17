@@ -24,7 +24,7 @@ import {
   type SectionId,
 } from "./fields";
 import { LPA_MAX_GEAR_AREA_SQ_FT } from "./constants";
-import type { LpaApplication } from "./schema";
+import { speciesLabel, type LpaApplication } from "./schema";
 
 /* -------------------------------------------------------------------------- */
 /* Progress                                                                    */
@@ -231,6 +231,23 @@ export function validateApplication(
     });
   }
 
+  // The upweller-only exemption is available only to a site that is an upweller
+  // and nothing else. This one is deterministic rather than left to the
+  // plausibility check because of ordering: the exemption is asked in section 3
+  // and the gear in section 10, so at the moment it's claimed there is no gear
+  // to contradict it and no model can catch it. Here it simply fires later, when
+  // the gear arrives.
+  if (app.ownerOperatorExemption === "upweller_only") {
+    const otherGear = (app.gearCategories ?? []).filter((category) => category !== "upweller");
+    if (otherGear.length > 0) {
+      issues.push({
+        severity: "blocking",
+        field: "ownerOperatorExemption",
+        message: `You've claimed the upweller-only exemption, which applies to a site with an upweller and no other gear, but ${otherGear.length === 1 ? "another gear category is" : `${otherGear.length} other gear categories are`} listed. Either drop the extra gear or claim a different exemption.`,
+      });
+    }
+  }
+
   /* --- Coordinates --- */
 
   if (app.latitude !== null && (app.latitude < MAINE_LAT.min || app.latitude > MAINE_LAT.max)) {
@@ -308,7 +325,7 @@ export function validateApplication(
           field: "wildStock",
           // Uses the normalized digits, not the raw strings, so the message
           // doesn't read "zone Zone 3" when the applicant wrote it out.
-          message: `${source.species ?? "That wild stock"} is listed as coming from health zone ${sourceZone}, but the site is in health zone ${siteZone}. Wild stock and seed must originate from the same LPA health zone as the license site.`,
+          message: `${speciesLabel(source.species)} is listed as coming from health zone ${sourceZone}, but the site is in health zone ${siteZone}. Wild stock and seed must originate from the same LPA health zone as the license site.`,
         });
       }
     }

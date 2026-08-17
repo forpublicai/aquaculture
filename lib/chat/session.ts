@@ -21,6 +21,7 @@ import {
   runApplicationTurn,
   seedApplication,
 } from "@/lib/application/lpa/interview";
+import { answerRecall } from "@/lib/application/lpa/recall";
 import type { LpaApplication } from "@/lib/application/lpa/schema";
 import { classifyIntent } from "@/lib/chat/intent";
 import { writeStaticText } from "@/lib/chat/respond";
@@ -224,6 +225,14 @@ export async function handleMessage(
     // outstanding (see the Q&A instructions). Appending a second message here
     // to do that job wrote it *before* the streamed answer, since writer.merge
     // returns as soon as the merge is set up rather than when it finishes.
+    return state;
+  }
+
+  // Asking what the app already holds is neither a regulatory question nor an
+  // answer, so before this it fell through to extraction, found nothing, and got
+  // apologized at.
+  if (intent === "application_recall" && state.application) {
+    await answerRecall(state.application, userMessage, writer);
     return state;
   }
 
