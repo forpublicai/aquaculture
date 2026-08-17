@@ -7,19 +7,32 @@
  * read and write is scoped by user id, so a conversation id alone is not
  * enough to reach someone else's chat.
  *
- * Each message is classified and routed to either the license-triage interview
- * or regulatory Q&A.
+ * Each message is classified and routed to one of three places: regulatory Q&A,
+ * the license-triage interview, or — once triage has settled on a license type —
+ * the application intake interview that fills that license's form in.
  */
 import { randomUUID } from "node:crypto";
 
 import type { UIMessage, UIMessageStreamWriter } from "ai";
 
+import {
+  formatIntakeIntro,
+  pendingQuestionText,
+  runApplicationTurn,
+  seedApplication,
+} from "@/lib/application/lpa/interview";
+import type { LpaApplication } from "@/lib/application/lpa/schema";
 import { classifyIntent } from "@/lib/chat/intent";
 import { writeStaticText } from "@/lib/chat/respond";
 import { answerQuestion, EMPTY_KB_MESSAGE } from "@/lib/rag/qa";
 import { UNDETERMINED_ROUTING } from "@/lib/routing/rules";
 import { nextQuestion, runInterviewTurn } from "@/lib/routing/interview";
-import { EMPTY_PROFILE, type OperationProfile, type RoutingResult } from "@/lib/routing/schema";
+import {
+  EMPTY_PROFILE,
+  LicenseType,
+  type OperationProfile,
+  type RoutingResult,
+} from "@/lib/routing/schema";
 import { supabase } from "@/lib/supabase";
 
 export const UNTITLED = "New conversation";
@@ -33,9 +46,15 @@ export interface ConversationState {
   routing: RoutingResult;
   /** Full chat transcript, in the wire format useChat renders directly. */
   messages: UIMessage[];
+  /**
+   * The draft license application. Null until triage recommends a license type
+   * we can collect a form for (currently LPA only), which is what marks the
+   * conversation as having moved from triage into intake.
+   */
+  application: LpaApplication | null;
 }
 
-/** A row in the chat list — everything the sidebar needs, nothing more. */
+/** A row in the chat list, holding everything the sidebar needs and nothing more. */
 export interface ConversationSummary {
   id: string;
   title: string;
@@ -68,6 +87,7 @@ export async function createConversation(userId: string): Promise<ConversationSu
     profile: EMPTY_PROFILE,
     routing: UNDETERMINED_ROUTING,
     messages: [],
+    application: null,
     created_at: now,
     updated_at: now,
   });
@@ -96,7 +116,7 @@ export async function loadConversation(
 ): Promise<ConversationState | null> {
   const { data, error } = await supabase
     .from("conversations")
-    .select("id, user_id, title, profile, routing, messages")
+    .select("id, user_id, title, profile, routing, messages, application")
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -110,6 +130,7 @@ export async function loadConversation(
     profile: (data.profile as OperationProfile) ?? EMPTY_PROFILE,
     routing: (data.routing as RoutingResult) ?? UNDETERMINED_ROUTING,
     messages: (data.messages as UIMessage[] | null) ?? [],
+    application: (data.application as LpaApplication | null) ?? null,
   };
 }
 
@@ -121,18 +142,64 @@ export async function saveConversation(state: ConversationState): Promise<void> 
     profile: state.profile,
     routing: state.routing,
     messages: state.messages,
+    application: state.application,
     updated_at: new Date().toISOString(),
   });
   if (error) throw new Error(`Failed to save conversation: ${error.message}`);
 }
 
-function otherReply(state: ConversationState): string {
-  if (state.routing.missingFields.length > 0) {
-    return `Happy to help! ${nextQuestion(state.profile)}`;
+/** The question the applicant still owes us an answer to, if any. */
+function pendingQuestion(state: ConversationState): string | null {
+  if (state.application) return pendingQuestionText(state.application);
+  const question = nextQuestion(state.profile);
+  return question === "" ? null : question;
+}
+
+/**
+ * Tells the Q&A model where the applicant is standing. A question asked in the
+ * middle of an interview is nearly always a request for help answering *that
+ * question*. Someone asking "what's the difference between cultivation
+ * methods?" right after being asked which gear they'll use wants to know which
+ * box to tick, not a survey of every license type's gear taxonomy.
+ */
+function describeSituation(state: ConversationState): string {
+  const pending = pendingQuestion(state);
+
+  if (state.application) {
+    return (
+      "Partway through filling in the LPA license application" +
+      (pending ? `, having just been asked: "${pending}"` : "") +
+      ". Answer in whatever way best helps them with that. They have already been " +
+      "told an LPA is the right license, so don't cover experimental or standard " +
+      "leases unless they explicitly ask to compare."
+    );
   }
+
+  if (state.routing.licenseType !== LicenseType.UNDETERMINED) {
+    return (
+      `They've been told a ${state.routing.licenseType} looks like the right fit, but ` +
+      "haven't started that application yet. Focus on that license type."
+    );
+  }
+
   return (
-    "Happy to help! Ask me anything about Maine DMR aquaculture regulations, " +
-    "or let me know if anything about your operation has changed."
+    "Still working out which license type they need" +
+    (pending ? `, having just been asked: "${pending}"` : "") +
+    ". Help them answer that. Compare license types only if they asked a " +
+    "comparative question."
+  );
+}
+
+/**
+ * Reply to a greeting or an aside. If there's a question outstanding it just
+ * asks it again, rather than prefixing it with a cheerful acknowledgement that
+ * adds nothing and reads like a bot.
+ */
+function otherReply(state: ConversationState): string {
+  return (
+    pendingQuestion(state) ??
+    "Ask me anything about Maine DMR aquaculture regulations, or tell me if " +
+      "something about your operation has changed."
   );
 }
 
@@ -149,11 +216,29 @@ export async function handleMessage(
   const intent = await classifyIntent(userMessage);
 
   if (intent === "regulatory_question") {
-    const { sources } = await answerQuestion(userMessage, writer);
+    const { sources } = await answerQuestion(userMessage, describeSituation(state), writer);
     if (sources.length === 0) {
       writeStaticText(writer, EMPTY_KB_MESSAGE);
     }
+    // The answer itself hands the conversation back to whatever question was
+    // outstanding (see the Q&A instructions). Appending a second message here
+    // to do that job wrote it *before* the streamed answer, since writer.merge
+    // returns as soon as the merge is set up rather than when it finishes.
     return state;
+  }
+
+  // Once an application draft exists the conversation's job has changed from
+  // "which license?" to "let's fill this one in", so everything that isn't a
+  // regulatory question is treated as an answer to the question we just asked.
+  // A greeting or an aside extracts nothing and simply gets the question again.
+  if (state.application) {
+    const { application, reply } = await runApplicationTurn(
+      state.application,
+      userMessage,
+      state.profile
+    );
+    writeStaticText(writer, reply);
+    return { ...state, application };
   }
 
   if (intent === "other") {
@@ -162,6 +247,15 @@ export async function handleMessage(
   }
 
   const { profile, routing, reply } = await runInterviewTurn(state.profile, userMessage);
+
+  // Triage has just landed on an LPA: open the application and roll straight
+  // into the first intake question rather than making the applicant ask.
+  if (routing.licenseType === LicenseType.LIMITED_PURPOSE_AQUACULTURE) {
+    const application = seedApplication(profile);
+    writeStaticText(writer, `${reply}\n\n---\n\n${formatIntakeIntro(application)}`);
+    return { ...state, profile, routing, application };
+  }
+
   writeStaticText(writer, reply);
   return { ...state, profile, routing };
 }

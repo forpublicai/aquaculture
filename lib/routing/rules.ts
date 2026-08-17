@@ -58,7 +58,7 @@ export function route(profile: OperationProfile): RoutingResult {
   if (duration > STANDARD_LEASE_MAX_DURATION_YEARS) {
     incompatibilityWarning =
       `A ${duration}-year term exceeds the typical ${STANDARD_LEASE_MAX_DURATION_YEARS}-year ` +
-      "maximum for a Maine DMR standard aquaculture lease — confirm the current maximum " +
+      "maximum for a Maine DMR standard aquaculture lease. Confirm the current maximum " +
       "term with DMR before applying.";
   }
 
@@ -96,7 +96,7 @@ export function route(profile: OperationProfile): RoutingResult {
     licenseType: LicenseType.STANDARD_LEASE,
     rationale:
       `A site of ${area.toFixed(0)} sq ft and a ${duration}-year term exceed the LPA and ` +
-      "experimental lease thresholds, which points to a standard aquaculture lease — " +
+      "experimental lease thresholds, which points to a standard aquaculture lease, " +
       "Maine's long-term license for established commercial-scale operations. This is " +
       "the most involved application: expect riparian landowner notification, a tax " +
       "map, and a public scoping process.",

@@ -6,29 +6,69 @@
  */
 import { embed, streamText, toUIMessageStream, type UIMessageStreamWriter } from "ai";
 
+import { HOUSE_STYLE } from "@/lib/chat/style";
 import { chatModel, embeddingModel } from "@/lib/openrouter";
 import { describeSource } from "@/lib/rag/catalog";
 import { supabase } from "@/lib/supabase";
 
 export const EMPTY_KB_MESSAGE =
-  "I don't have any regulatory documents loaded yet to answer that from — the " +
-  "knowledge base is empty. Add Maine DMR application forms, statutes, or guidance " +
-  "documents and re-run ingestion, or check with DMR directly in the meantime.";
+  "I don't have any regulatory documents loaded yet, so there's nothing for me to " +
+  "answer that from. Add Maine DMR application forms, statutes, or guidance documents " +
+  "and re-run ingestion, or check with DMR directly in the meantime.";
 
-const RAG_INSTRUCTIONS = `You are a regulatory Q&A assistant for Maine aquaculture \
-license applicants. Answer the applicant's question using ONLY the context \
-documents provided below — do not rely on outside knowledge of Maine DMR \
-rules, since it may be outdated or wrong.
+/**
+ * Voice and format guidance is as load-bearing here as the grounding rules.
+ *
+ * Written against two real failures. First: asked to compare cultivation
+ * methods, the model produced a ten-row table, three headings, and a closing
+ * caveat longer than the answer. Second, after that was fixed: an answer that
+ * was the right length but had an em dash in every bullet and one in the opening
+ * sentence, which reads as machine output however correct it is.
+ *
+ * The `situation` slot tells the model where the applicant actually is. A
+ * question asked during an interview is nearly always a request for help
+ * answering *that question*, not for a survey of the topic, and the answer should
+ * hand the conversation back at the end. That handoff used to be a separate
+ * message appended after the stream; it's part of the answer now, because a
+ * mechanical "Back to it" bolted onto a reply that already covered the ground
+ * just reads as the app repeating itself.
+ */
+const RAG_INSTRUCTIONS = `You are helping someone apply for a Maine aquaculture \
+license. Answer their question using ONLY the context documents below, never \
+from your own knowledge of DMR rules, which may be out of date or wrong.
 
-If the context doesn't contain enough information to answer confidently, say \
-so plainly and suggest the applicant check with DMR directly. Never present \
-a guess as a confirmed regulatory requirement.
+Where the applicant is right now: {situation}
 
-When you do answer from the context, keep it concise and cite your sources \
-using the exact markdown link given on the "cite as:" line of each context \
-document — for example [DMR: LPA and Lease Requirements](https://www.maine.gov/...). \
-Never cite a bare filename, and never write a URL that does not appear in the \
-context below.
+${HOUSE_STYLE}
+
+Shape of the answer:
+
+- Lead with the direct answer in one or two sentences. They should be able to \
+stop reading after the first line and have got the main thing.
+- Then add only the detail that helps them act on it. Under 150 words unless \
+the question genuinely needs more.
+- Use a short bulleted list only when genuinely enumerating three or more \
+parallel items. Keep each bullet to a line. Where a bullet needs a label and a \
+description, separate them with a colon, not a dash.
+- No headings and no markdown tables. This is a narrow chat column and both \
+read badly in it.
+- Leave out anything they didn't ask about, however interesting it is.
+
+If the note above says they were in the middle of being asked something, finish \
+with one short sentence that hands the conversation back to that question, \
+phrased in your own words. Don't repeat the question word for word, don't add a \
+divider, and don't do this if they weren't in the middle of anything.
+
+Citing:
+
+- Cite using the exact markdown link on the "cite as:" line of a context document.
+- One citation at the end of the sentence it supports. Don't stack links \
+together and don't repeat the same link through the answer.
+- Never cite a bare filename, and never write a URL that isn't in the context.
+
+If the context doesn't answer the question, say so in a sentence and point them \
+to DMR. Don't pad it out with the parts you almost know, and never present a \
+guess as a confirmed requirement.
 
 Context:
 {context}`;
@@ -78,6 +118,7 @@ function formatContext(chunks: DocumentChunk[]): string {
  */
 export async function answerQuestion(
   question: string,
+  situation: string,
   writer: UIMessageStreamWriter
 ): Promise<{ sources: string[] }> {
   const chunks = await retrieve(question);
@@ -85,7 +126,10 @@ export async function answerQuestion(
 
   const result = streamText({
     model: chatModel,
-    instructions: RAG_INSTRUCTIONS.replace("{context}", formatContext(chunks)),
+    instructions: RAG_INSTRUCTIONS.replace("{situation}", situation).replace(
+      "{context}",
+      formatContext(chunks)
+    ),
     prompt: question,
   });
   writer.merge(toUIMessageStream({ stream: result.fullStream }));

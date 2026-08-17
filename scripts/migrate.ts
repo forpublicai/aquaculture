@@ -33,7 +33,7 @@ const MIGRATIONS_DIR = path.join(process.cwd(), "supabase", "migrations");
  * does nothing: pg's ConnectionParameters does
  * `Object.assign({}, config, parse(config.connectionString))`, so whatever
  * sslmode is in the URL overwrites the explicit option. Setting it in the
- * string itself is the path pg actually honours (it maps `no-verify` to
+ * string itself is the path pg actually honors (it maps `no-verify` to
  * `{ rejectUnauthorized: false }`).
  *
  * The traffic is still encrypted; we're skipping certificate-chain
