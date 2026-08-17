@@ -29,7 +29,26 @@ import { z } from "zod";
 
 export const PaymentType = z.enum(["check", "credit_card"]);
 
+/**
+ * Every enum below carries a glossary.
+ *
+ * The extraction model is shown the allowed values as bare identifiers, and is
+ * told (rightly) not to guess. Given a choice between `lease_in_own_name` and
+ * `applied_for_lease_own_name` with nothing to distinguish them, the honest
+ * answer is null, which leaves the field unanswered and the interview asking the
+ * same question again. Spelling out what each value means is what makes mapping
+ * plain English onto them possible.
+ */
+const PAYMENT_TYPE_VALUES =
+  "'check': a check is enclosed with the application. " +
+  "'credit_card': DMR will contact the applicant for payment details.";
+
 export const SitePurpose = z.enum(["commercial", "recreational", "scientific", "educational"]);
+
+const SITE_PURPOSE_VALUES =
+  "'commercial': the product is ultimately sold. " +
+  "'recreational': kept for personal use, not sold. " +
+  "'scientific': research. 'educational': teaching.";
 
 /** Owner/operator exemptions, from the form's "Designating Assistants" page. */
 export const OwnerOperatorExemption = z.enum([
@@ -40,6 +59,14 @@ export const OwnerOperatorExemption = z.enum([
   "ownership_interest_in_applicant_company",
   "upweller_only",
 ]);
+
+const OWNER_OPERATOR_EXEMPTION_VALUES =
+  "'none': no exemption claimed, the applicant will supervise or designate a primary assistant. " +
+  "'lease_in_own_name': holds an experimental or standard lease in their own name. " +
+  "'ownership_interest_50_plus': owns 50% or more of a company that holds an experimental or standard lease. " +
+  "'applied_for_lease_own_name': has applied for a lease in their own name, and this LPA sits within that proposed site. " +
+  "'ownership_interest_in_applicant_company': has an ownership interest in a company that has applied for a lease, and this LPA sits within the proposed boundaries. " +
+  "'upweller_only': the site is an upweller and nothing else.";
 
 /** The ten gear categories the form asks you to check. */
 export const GearCategory = z.enum([
@@ -54,6 +81,19 @@ export const GearCategory = z.enum([
   "marine_algae_gear",
   "bottom_anti_predator_netting",
 ]);
+
+/** Wording follows the gear definitions printed on the form. */
+const GEAR_CATEGORY_VALUES =
+  "'no_gear_bottom_culture': grown on the bottom, no gear or predator netting. " +
+  "'upweller': floating upweller system for spat grow-out. " +
+  "'shellfish_rafts': floating raft with suspended dropper lines and anti-predator netting, typical of mussel culture. " +
+  "'tray_racks_and_overwintering_cages': rigid mesh boxes, often with interior shelves and floats, such as OysterGro or OysterRanch. " +
+  "'soft_or_semi_rigid_bags_or_floating_trays': single-layer mesh bags, floated in lines, held in tray racks, or sunk to the bottom. " +
+  "'lantern_or_pearl_nets': lantern nets are five or ten tiers of circular nets on a central line; pearl nets are single pyramidal enclosures. " +
+  "'scallop_spat_collector_bags': mesh bags with added material to increase surface area, several on a vertical line. " +
+  "'scallop_ear_hangers': lines attaching individual scallops by ear hangers. " +
+  "'marine_algae_gear': rope, rafts with ropes, bags, longlines, or rope grids. " +
+  "'bottom_anti_predator_netting': netting spread over the bottom to exclude predators.";
 
 /**
  * Gear that floats at or near the surface and can host roosting birds. Drives
@@ -78,6 +118,92 @@ export const NearbyFeature = z.enum([
   "state_or_federal_beach",
   "docking_facility",
 ]);
+
+/* -------------------------------------------------------------------------- */
+/* Species                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The form gives no free-text species box. It gives two printed checkbox lists,
+ * and which list a species appears on carries a rule: hard clam, both surf
+ * clams, soft-shelled clam, razor clam, European oyster and bay scallop may only
+ * come from an approved hatchery. Modeling species as a plain string let the app
+ * record "mussels", which matches no box on the form and would have to be
+ * re-interpreted when the document is finally produced. Two enums instead, so
+ * the wild list structurally cannot hold a hatchery-only species.
+ */
+const HATCHERY_SPECIES = [
+  "blue_mussel",
+  "eastern_oyster",
+  "hard_clam_quahog",
+  "soft_shelled_clam",
+  "atlantic_surf_clam",
+  "arctic_surf_clam",
+  "razor_clam",
+  "green_sea_urchin",
+  "bay_scallop",
+  "sugar_kelp",
+  "skinny_kelp",
+  "horsetail_kelp",
+  "winged_kelp",
+  "dulse",
+  "european_oyster",
+  "other",
+] as const;
+
+const WILD_SPECIES = [
+  "blue_mussel",
+  "eastern_oyster",
+  "sea_scallop",
+  "green_sea_urchin",
+  "marine_algae",
+] as const;
+
+export const HatcherySpecies = z.enum(HATCHERY_SPECIES);
+export const WildSpecies = z.enum(WILD_SPECIES);
+
+/** Printed names from the form, for the model, the review screen and the output. */
+export const SPECIES_LABELS: Record<string, string> = {
+  blue_mussel: "Blue mussel (Mytilus edulis)",
+  eastern_oyster: "American/eastern oyster (Crassostrea virginica)",
+  hard_clam_quahog: "Hard clam/quahog (Mercenaria mercenaria)",
+  soft_shelled_clam: "Soft-shelled clam (Mya arenaria)",
+  atlantic_surf_clam: "Atlantic surf clam (Spisula solidissima)",
+  arctic_surf_clam: "Arctic surf clam (Mactromeris polynyma)",
+  razor_clam: "Razor clam (Ensis leei)",
+  green_sea_urchin: "Green sea urchin (Strongylocentrotus droebachiensis)",
+  bay_scallop: "Bay scallop (Aequipecten irradians)",
+  sea_scallop: "Sea scallop (Placopecten magellanicus)",
+  sugar_kelp: "Sugar kelp (Saccharina latissima)",
+  skinny_kelp: "Skinny kelp (Saccharina angustissima)",
+  horsetail_kelp: "Horsetail kelp (Laminaria digitata)",
+  winged_kelp: "Winged kelp (Alaria esculenta)",
+  dulse: "Dulse (Palmaria palmata)",
+  european_oyster: "European oyster (Ostrea edulis)",
+  marine_algae: "Marine algae",
+  other: "Other (name it in the species notes)",
+};
+
+/** Turns a stored species key into something a person reads. */
+export function speciesLabel(key: string | null | undefined): string {
+  if (!key) return "unnamed species";
+  return SPECIES_LABELS[key] ?? key;
+}
+
+function speciesGlossary(keys: readonly string[]): string {
+  return keys.map((key) => `'${key}': ${SPECIES_LABELS[key]}.`).join(" ");
+}
+
+const HATCHERY_SPECIES_VALUES =
+  `${speciesGlossary(HATCHERY_SPECIES)} ` +
+  "Note there is no approved hatchery for European oyster at present. " +
+  "Use 'other' only when the species genuinely isn't on this list.";
+
+const WILD_SPECIES_VALUES =
+  `${speciesGlossary(WILD_SPECIES)} ` +
+  "Only these may be taken from the wild. Hard clam, surf clams, soft-shelled " +
+  "clam, razor clam, European oyster and bay scallop must come from an approved " +
+  "hatchery, so they never appear here.";
 
 /* -------------------------------------------------------------------------- */
 /* Repeating sub-structures                                                    */
@@ -116,7 +242,11 @@ export const EMPTY_USE_OBSERVATION: UseObservation = {
 
 /** A species sourced from a DMR-approved hatchery or the non-shellfish stock list. */
 export const HatcheryStockSchema = z.object({
-  species: z.string().describe("Common name of the species, e.g. 'American/eastern oyster'."),
+  species: HatcherySpecies.describe(`Which species. ${HATCHERY_SPECIES_VALUES}`),
+  speciesNote: z
+    .string()
+    .nullable()
+    .describe("Free text naming the species when 'other' is selected, otherwise null."),
   hatcheryName: z.string().nullable().describe("Name of the DMR-approved hatchery or facility."),
   hatcheryAddress: z.string().nullable(),
   hatcheryPhone: z.string().nullable(),
@@ -124,7 +254,11 @@ export const HatcheryStockSchema = z.object({
 
 /** A species sourced from wild stock or another aquaculture site. */
 export const WildStockSchema = z.object({
-  species: z.string(),
+  species: WildSpecies.describe(`Which species. ${WILD_SPECIES_VALUES}`),
+  speciesNote: z
+    .string()
+    .nullable()
+    .describe("Free text detail, such as which marine algae, otherwise null."),
   waterbody: z.string().nullable().describe("Waterbody the organisms are harvested from."),
   healthZone: z
     .string()
@@ -148,7 +282,11 @@ export const GearItemSchema = z.object({
 
 /** A feature within 1,000 feet, paired with the applicant's impact assessment. */
 export const NearbyFeatureImpactSchema = z.object({
-  feature: NearbyFeature,
+  feature: NearbyFeature.describe(
+    "Which listed feature this is. Values name themselves: a town landing is a " +
+      "'docking_facility', a marked channel is a 'navigational_channel', another " +
+      "grower's site is 'aquaculture_leases_or_lpas'."
+  ),
   impact: z.string().nullable().describe("How the proposed site will impact this feature."),
 });
 
@@ -193,7 +331,8 @@ export const LpaFormSchema = z.object({
     .array(z.string())
     .nullable()
     .describe("Previous LPA acronyms, if this site was applied for before."),
-  paymentType: PaymentType.nullable().describe("How the application fee will be paid."),
+  paymentType: PaymentType.nullable()
+    .describe(`How the application fee will be paid. ${PAYMENT_TYPE_VALUES}`),
 
   /* --- Existing aquaculture activities (form page 1) --- */
   isAssistantOnOtherLpas: z
@@ -218,7 +357,8 @@ export const LpaFormSchema = z.object({
     .describe("Assistant designated to supervise licensed activity when the holder is absent."),
   primaryAssistantEmail: z.string().nullable(),
   ownerOperatorExemption: OwnerOperatorExemption.nullable().describe(
-    "Which owner/operator exemption the applicant claims, or 'none'."
+    "Which owner/operator exemption the applicant claims. " +
+      `Use 'none' when they say they aren't claiming one. ${OWNER_OPERATOR_EXEMPTION_VALUES}`
   ),
   exemptionLeaseAcronym: z.string().nullable().describe("Lease acronym supporting the exemption."),
   exemptionCompanyName: z.string().nullable(),
@@ -259,7 +399,9 @@ export const LpaFormSchema = z.object({
     .boolean()
     .nullable()
     .describe("Whether the municipality is served by a harbormaster."),
-  purpose: SitePurpose.nullable().describe("Purpose of the operation."),
+  purpose: SitePurpose.nullable().describe(
+    `Purpose of the operation. ${SITE_PURPOSE_VALUES}`
+  ),
 
   /* --- Water quality classification (form page 3) --- */
   growingAreaDesignation: z
@@ -328,7 +470,12 @@ export const LpaFormSchema = z.object({
   nearbyFeatures: z.array(NearbyFeatureImpactSchema).nullable(),
 
   /* --- Gear (form pages 10-11) --- */
-  gearCategories: z.array(GearCategory).nullable(),
+  gearCategories: z
+    .array(GearCategory)
+    .nullable()
+    .describe(
+      `Every gear category the applicant is seeking authorization for. ${GEAR_CATEGORY_VALUES}`
+    ),
   gearItems: z
     .array(GearItemSchema)
     .nullable()
