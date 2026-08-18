@@ -9,6 +9,7 @@
     "lint": "eslint",
     "ingest": "tsx scripts/ingest.ts",
     "kb:status": "tsx scripts/kb-status.ts",
+    "check:review": "tsx scripts/check-review-screen.ts",
     "migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
