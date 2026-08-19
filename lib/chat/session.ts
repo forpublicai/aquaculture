@@ -22,6 +22,7 @@ import {
   seedApplication,
 } from "@/lib/application/lpa/interview";
 import { answerRecall } from "@/lib/application/lpa/recall";
+import { migrateApplication } from "@/lib/application/lpa/normalize";
 import type { LpaApplication } from "@/lib/application/lpa/schema";
 import { classifyIntent } from "@/lib/chat/intent";
 import { writeStaticText } from "@/lib/chat/respond";
@@ -131,7 +132,9 @@ export async function loadConversation(
     profile: (data.profile as OperationProfile) ?? EMPTY_PROFILE,
     routing: (data.routing as RoutingResult) ?? UNDETERMINED_ROUTING,
     messages: (data.messages as UIMessage[] | null) ?? [],
-    application: (data.application as LpaApplication | null) ?? null,
+    // Not cast. A draft may have been written against an older shape of the
+    // form, and the rest of the app has no way to tell.
+    application: migrateApplication(data.application),
   };
 }
 

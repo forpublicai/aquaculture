@@ -81,8 +81,9 @@ const CONTEXT_KEYS: LpaFormKey[] = [
   "depthAtMeanHighWaterFt",
   // What's grown and how. Lets gear be weighed against species, and the
   // upweller-only exemption against the gear actually proposed.
-  "hatcheryStock",
-  "wildStock",
+  "species",
+  "hatcherySources",
+  "wildSources",
   "gearCategories",
   "gearLayoutWidthFt",
   "gearLayoutLengthFt",
@@ -101,18 +102,30 @@ const CONTEXT_KEYS: LpaFormKey[] = [
 /**
  * Shrinks a context value to the part worth reasoning about.
  *
- * The stock lists carry hatchery names, addresses and phone numbers, none of
- * which help decide whether the gear suits the species. Sending them whole would
- * pay for tokens on every turn to no purpose, and buries the species name that
- * actually matters in noise.
+ * The source tables carry addresses, phone numbers and license numbers, none of
+ * which help decide whether the gear suits the species or whether a stated town
+ * sits in the stated county. Sending them whole would pay for tokens on every
+ * turn to no purpose and bury the fields that do matter in noise. What is kept
+ * is the species and the one detail a contradiction could turn on: which
+ * hatchery, or which waterbody and health zone.
+ *
+ * The species list itself needs no shrinking, which is a small dividend of the
+ * split: what is grown is now a short list of names rather than a table.
  */
+const CONTEXT_PARTS: Partial<Record<LpaFormKey, string[]>> = {
+  hatcherySources: ["species", "hatcheryName"],
+  wildSources: ["species", "waterbody", "healthZone"],
+};
+
 function compactForContext(key: LpaFormKey, value: unknown): unknown {
-  if (key !== "hatcheryStock" && key !== "wildStock") return value;
-  if (!Array.isArray(value)) return value;
-  return value
-    .filter(Boolean)
-    .map((entry) => (entry as { species?: string })?.species)
-    .filter(Boolean);
+  const parts = CONTEXT_PARTS[key];
+  if (!parts || !Array.isArray(value)) return value;
+  return value.filter(Boolean).map((entry) => {
+    const record = entry as Record<string, unknown>;
+    return Object.fromEntries(
+      parts.filter((part) => record?.[part] != null).map((part) => [part, record[part]])
+    );
+  });
 }
 
 const ConcernsSchema = z.object({

@@ -16,10 +16,15 @@
  * licensed as described; warnings are everything else worth a second look.
  */
 import {
+  blankUseObservationBoxes,
   fieldAnswered,
   fieldApplies,
   LPA_FIELDS,
   LPA_SECTIONS,
+  rowsMissingDetail,
+  SOURCE_TABLES,
+  speciesAwaitingSource,
+  speciesPlacedIn,
   type LpaFieldDef,
   type SectionId,
 } from "./fields";
@@ -288,12 +293,75 @@ export function validateApplication(
     });
   }
 
-  const sources = [...(app.hatcheryStock ?? []), ...(app.wildStock ?? [])].filter(Boolean);
-  if (app.hatcheryStock !== null && app.wildStock !== null && sources.length === 0) {
+  // Every species named has to be placed in one of the two tables. Before
+  // species and source were separate fields this could not be checked at all:
+  // an unsourced species had no way to exist, so it was simply never recorded.
+  for (const table of ["hatchery", "wild"] as const) {
+    const owed = speciesAwaitingSource(table, app);
+    if (owed.length === 0) continue;
+    const named = owed.map(speciesLabel).join(", ");
     issues.push({
       severity: "warning",
-      field: "hatcheryStock",
-      message: "No species are listed yet. The form needs at least one species and its stock source.",
+      field: SOURCE_TABLES[table].key,
+      message:
+        owed.length === 1
+          ? `${named} has no source recorded. The form needs a hatchery, or a waterbody and harvester, alongside every species.`
+          : `These have no source recorded: ${named}. The form needs a hatchery, or a waterbody and harvester, alongside every species.`,
+    });
+  }
+
+  // The reverse: a source row for something the applicant is not growing. Easy
+  // to produce by deselecting a species after its source was filled in, and it
+  // would print as a checked box on the form.
+  for (const table of ["hatchery", "wild"] as const) {
+    const chosen = new Set<string>(Array.isArray(app.species) ? app.species : []);
+    const stray = [...speciesPlacedIn(table, app)].filter((species) => !chosen.has(species));
+    if (stray.length === 0) continue;
+    issues.push({
+      severity: "warning",
+      field: SOURCE_TABLES[table].key,
+      message: `${stray.map(speciesLabel).join(", ")} has a source recorded but is not among the species you're growing. Either add it back to the species list or remove the source.`,
+    });
+  }
+
+  // Placed in a table but missing the column the form most needs. Kept separate
+  // from "no source recorded" above, and from answeredness, because an
+  // incomplete answer is a validity problem rather than a completeness one: the
+  // interview asks for the missing column by name and moves on either way.
+  for (const table of ["hatchery", "wild"] as const) {
+    const { key, detailLabel } = SOURCE_TABLES[table];
+    const incomplete = rowsMissingDetail(table, app);
+    if (incomplete.length === 0) continue;
+    issues.push({
+      severity: "warning",
+      field: key,
+      message: `${incomplete.map(speciesLabel).join(", ")} has a source recorded without ${detailLabel}. The form asks for it.`,
+    });
+  }
+
+  // An observation that says the use happens but describes none of it. Reported
+  // rather than demanded, for the same reason as a half-filled source row: a
+  // partial answer is a validity problem, and treating it as no answer at all is
+  // how the interview starts repeating itself.
+  for (const field of LPA_FIELDS) {
+    if (field.kind !== "use_observation") continue;
+    if (!fieldApplies(field, app)) continue;
+    const blank = blankUseObservationBoxes(app[field.key]);
+    if (blank.length === 0) continue;
+    issues.push({
+      severity: "warning",
+      field: field.key,
+      message: `${field.label} is recorded as happening, but ${blank.length} of the form's five questions about it are still blank.`,
+    });
+  }
+
+  // The form says so in as many words, in the hatchery table itself.
+  if ((app.species ?? []).includes("european_oyster")) {
+    issues.push({
+      severity: "warning",
+      field: "species",
+      message:
+        "There is no approved hatchery for European oyster at this time, so there may be no lawful source of seed for it.",
     });
   }
 
@@ -312,17 +380,17 @@ export function validateApplication(
   // Wild stock must originate from the applicant's own health zone (DMR Rule
   // Chapter 2.05(1)(J)). This is a mismatch the applicant can easily miss —
   // they name a harvester they've always used, without checking which zone that
-  // harvester fishes. Hatchery stock is exempt, which is why only wildStock is
+  // harvester fishes. Hatchery stock is exempt, which is why only wildSources is
   // checked here.
   if (app.lpaHealthZone) {
     const siteZone = normalizeZone(app.lpaHealthZone);
-    for (const source of (app.wildStock ?? []).filter(Boolean)) {
+    for (const source of (app.wildSources ?? []).filter(Boolean)) {
       if (typeof source.healthZone !== "string" || source.healthZone.trim() === "") continue;
       const sourceZone = normalizeZone(source.healthZone);
       if (siteZone && sourceZone && siteZone !== sourceZone) {
         issues.push({
           severity: "blocking",
-          field: "wildStock",
+          field: "wildSources",
           // Uses the normalized digits, not the raw strings, so the message
           // doesn't read "zone Zone 3" when the applicant wrote it out.
           message: `${speciesLabel(source.species)} is listed as coming from health zone ${sourceZone}, but the site is in health zone ${siteZone}. Wild stock and seed must originate from the same LPA health zone as the license site.`,

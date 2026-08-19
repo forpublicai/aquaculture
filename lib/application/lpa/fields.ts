@@ -18,6 +18,10 @@
  * screen never shows a field as "missing" when the form wouldn't ask for it.
  */
 import {
+  isHatcheryEligible,
+  isWildEligible,
+  soleTableFor,
+  speciesShortLabel,
   SUSPENDED_SHELLFISH_GEAR,
   type LpaApplication,
   type LpaFormKey,
@@ -100,6 +104,159 @@ export const LPA_SECTIONS: Section[] = [
   },
 ];
 
+/* -------------------------------------------------------------------------- */
+/* The form's two stock tables                                                  */
+/* -------------------------------------------------------------------------- */
+
+export type SourceTable = "hatchery" | "wild";
+
+/**
+ * The two tables, the column the form most needs from each, and how to name that
+ * column to an applicant.
+ *
+ * Described here in one place because each table's state is worked out against
+ * the other, which would otherwise be the same conditional written three times.
+ */
+export const SOURCE_TABLES: Record<
+  SourceTable,
+  { key: LpaFormKey; detail: string; detailLabel: string }
+> = {
+  hatchery: {
+    key: "hatcherySources",
+    detail: "hatcheryName",
+    detailLabel: "the hatchery or facility's name",
+  },
+  wild: { key: "wildSources", detail: "waterbody", detailLabel: "the waterbody it comes from" },
+};
+
+function rowsIn(table: SourceTable, app: LpaApplication): Record<string, unknown>[] {
+  // Widened through unknown on purpose. Rows are model-extracted and round-trip
+  // through JSONB, so the shape the type claims is a hope, not a guarantee.
+  const rows = app[SOURCE_TABLES[table].key] as unknown;
+  if (!Array.isArray(rows)) return [];
+  return (rows as unknown[]).filter(
+    (row): row is Record<string, unknown> => !!row && typeof row === "object"
+  );
+}
+
+function filled(value: unknown): boolean {
+  return typeof value === "string" ? value.trim() !== "" : value !== null && value !== undefined;
+}
+
+/**
+ * The species this table has a row for at all, however empty that row is.
+ *
+ * Placing a species is a separate act from describing where it comes from, and
+ * conflating them is what made the interview loop. Told "wild stock", extraction
+ * correctly opens a wild row for the mussel and leaves the columns null, because
+ * it was told a source *table* and no details. If that does not count as placing
+ * the species, the hatchery question goes on demanding a mussel the applicant has
+ * already said is wild, and nothing they can say will stop it.
+ */
+export function speciesPlacedIn(table: SourceTable, app: LpaApplication): Set<string> {
+  const placed = new Set<string>();
+  for (const row of rowsIn(table, app)) {
+    if (typeof row.species === "string") placed.add(row.species);
+  }
+  return placed;
+}
+
+/**
+ * Rows that say something about a source but not the thing the form most needs.
+ *
+ * A hatchery's address and phone with no name is a *correct* partial record:
+ * extraction is told to record the part it was given and leave the rest null.
+ * Treating such a row as no source at all produced a loop that nothing the
+ * applicant said could break, because the model had already recorded everything
+ * it had and returned the same row every turn while the same question came back.
+ *
+ * So a row like this counts as placed, and the missing column is asked for by
+ * name instead. Which is also a better question.
+ */
+export function rowsMissingDetail(table: SourceTable, app: LpaApplication): string[] {
+  const { detail } = SOURCE_TABLES[table];
+  const species: string[] = [];
+  for (const row of rowsIn(table, app)) {
+    if (typeof row.species !== "string") continue;
+    if (filled(row[detail])) continue;
+    species.push(row.species);
+  }
+  return species;
+}
+
+/**
+ * The species this table still owes a source for.
+ *
+ * Which species a table owes is not a property of the table alone. A species
+ * already sourced from a hatchery is accounted for and must not also be demanded
+ * of the wild table, and the other way round.
+ *
+ * The three printed on both tables are owed by the **hatchery** table alone,
+ * which is a decision worth being explicit about. Having both tables demand them
+ * looks fairer and produces a loop: the wild question would keep asking about a
+ * mussel that is going to come from a hatchery, and answering "none of it is
+ * wild" would change nothing, so the same question would come back. Buying seed
+ * in is also the ordinary case. So the hatchery question carries them, and its
+ * wording offers the wild table as the alternative; answering it either way
+ * settles the species.
+ */
+export function speciesAwaitingSource(table: SourceTable, app: LpaApplication): string[] {
+  const chosen = Array.isArray(app.species) ? app.species : [];
+  const other: SourceTable = table === "hatchery" ? "wild" : "hatchery";
+  const here = speciesPlacedIn(table, app);
+  const elsewhere = speciesPlacedIn(other, app);
+  return chosen.filter((species) => {
+    if (typeof species !== "string") return false;
+    if (here.has(species) || elsewhere.has(species)) return false;
+    const sole = soleTableFor(species);
+    return sole === table || (sole === null && table === "hatchery");
+  });
+}
+
+/** "a", "a and b", "a, b and c". */
+function inWords(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * What this source table still needs, in the applicant's terms.
+ *
+ * Two different gaps, and telling them apart is what stops the question reading
+ * as a repeat. A species with no row anywhere has not been placed, and the ask is
+ * where it comes from. A row that has been placed but is missing the column the
+ * form needs gets asked for that column by name. As answers arrive the question
+ * narrows, so the applicant can see it moving even when the field is not yet
+ * complete.
+ *
+ * Species are named after a colon rather than folded into the sentence, because
+ * the form's printed names are capitalized and "your Hard clam/quahog" reads
+ * like a mistake.
+ */
+function sourceQuestion(table: SourceTable, app: LpaApplication): string | null {
+  const awaiting = speciesAwaitingSource(table, app).map(speciesShortLabel);
+  const incomplete = rowsMissingDetail(table, app).map(speciesShortLabel);
+  const asks: string[] = [];
+
+  if (awaiting.length > 0) {
+    asks.push(
+      table === "hatchery"
+        ? `Where will your seed come from? For each of these I need the hatchery or facility's name, address, and phone number: ${inWords(awaiting)}. If any of them are coming from the wild or another aquaculture site instead, just tell me that.`
+        : `These can only come from the wild or from another aquaculture site: ${inWords(awaiting)}. For each one I need the waterbody, its health zone, and the licensed harvester's full name and license number.`
+    );
+  }
+
+  if (incomplete.length > 0) {
+    asks.push(
+      table === "hatchery"
+        ? `I still need the name of the hatchery or facility supplying ${inWords(incomplete)}.`
+        : `I still need the waterbody ${inWords(incomplete)} will be harvested from, and its health zone.`
+    );
+  }
+
+  return asks.length === 0 ? null : asks.join(" ");
+}
+
 export function sectionById(id: SectionId): Section {
   const section = LPA_SECTIONS.find((s) => s.id === id);
   if (!section) throw new Error(`Unknown LPA section: ${id}`);
@@ -113,6 +270,16 @@ export interface LpaFieldDef {
   label: string;
   /** How to ask for it in conversation. */
   question: string;
+  /**
+   * A question written against the answers already given, used in place of
+   * `question` when it returns something.
+   *
+   * Only the source tables need this, and they need it badly. "Where will your
+   * seed come from?" is a fair question in the abstract and a poor one when the
+   * app already knows it is waiting on the quahog and the mussel specifically.
+   * A vague prompt is the reliable way to get a null back out of extraction.
+   */
+  questionFor?: (app: LpaApplication) => string | null;
   /** Extra context worth showing the applicant, where the form is unobvious. */
   hint?: string;
   /**
@@ -126,13 +293,9 @@ export interface LpaFieldDef {
    */
   emptyListIsAnswer?: boolean;
   /** Composite objects need their own notion of "filled in". */
-  kind?: "use_observation" | "stock_list";
-  /**
-   * For a `stock_list`, the property every record must carry before the field
-   * counts as answered. Naming a species is enough to record it, but not enough
-   * to file it: the form wants the source alongside.
-   */
-  entryRequires?: string;
+  kind?: "use_observation" | "source_list";
+  /** For a `source_list`, which of the form's two stock tables it is. */
+  sourceTable?: SourceTable;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -345,6 +508,7 @@ export const LPA_FIELDS: LpaFieldDef[] = [
     section: "location",
     label: "Latitude",
     question: "What's the latitude of the center point of the site, in decimal degrees (e.g. 43.123456)?",
+    hint: "Straight off a plotter or a phone is fine too, like 43\u00b039'02.2\"N. I'll convert it.",
   },
   {
     key: "longitude",
@@ -436,25 +600,55 @@ export const LPA_FIELDS: LpaFieldDef[] = [
 
   /* --- Species and stock --- */
   {
-    key: "hatcheryStock",
+    key: "species",
     section: "species_stock",
-    kind: "stock_list",
-    entryRequires: "hatcheryName",
-    label: "Hatchery-sourced species",
+    label: "Species",
     question:
-      "Which species will you source from a DMR-approved hatchery, and what's the hatchery's name, address, and phone number? The form covers blue mussel, eastern oyster, quahog, soft-shelled clam, Atlantic and Arctic surf clam, razor clam, green sea urchin, bay scallop, sugar, skinny, horsetail and winged kelp, dulse, and European oyster.",
-    hint: "Quahog, surf clams, soft-shelled clam, razor clam, European oyster and bay scallop can only come from an approved hatchery. There's no approved European oyster hatchery at present.",
+      "What are you planning to grow? The form's list is blue mussel, American/eastern oyster, hard clam/quahog, soft-shelled clam, Atlantic surf clam, Arctic surf clam, razor clam, green sea urchin, bay scallop, sea scallop, sugar kelp, skinny kelp, horsetail kelp, winged kelp, dulse, marine algae, and European oyster. Name anything that isn't on it and I'll record it under Other.",
+    hint: "Just the species for now. Where each one comes from is the next question.",
+  },
+  {
+    key: "otherSpeciesNote",
+    section: "species_stock",
+    label: "Other species",
+    question: "Which species is it that isn't on the form's list?",
+    appliesWhen: (app) => (app.species ?? []).includes("other"),
+  },
+  {
+    key: "marineAlgaeNote",
+    section: "species_stock",
+    label: "Which marine algae",
+    question: "Which marine algae are you growing?",
+    appliesWhen: (app) => (app.species ?? []).includes("marine_algae"),
+  },
+  {
+    key: "hatcherySources",
+    section: "species_stock",
+    kind: "source_list",
+    sourceTable: "hatchery",
+    label: "Hatchery sources",
+    // A table nobody could put anything in is not part of this application. With
+    // no species named yet neither table applies, which also keeps a blank draft
+    // from reporting two questions answered before a word has been said: an
+    // empty table owes nothing, so it would otherwise read as complete.
+    appliesWhen: (app) => (app.species ?? []).some(isHatcheryEligible),
+    question:
+      "Where will your seed come from? For anything you're buying in, I need the hatchery or facility's name, address, and phone number.",
+    questionFor: (app) => sourceQuestion("hatchery", app),
+    hint: "Quahog, both surf clams, soft-shelled clam, razor clam, European oyster and bay scallop can only come from an approved hatchery. There's no approved European oyster hatchery at present.",
     emptyListIsAnswer: true,
   },
   {
-    key: "wildStock",
+    key: "wildSources",
     section: "species_stock",
-    kind: "stock_list",
-    entryRequires: "waterbody",
-    label: "Wild-sourced species",
+    kind: "source_list",
+    sourceTable: "wild",
+    label: "Wild sources",
+    appliesWhen: (app) => (app.species ?? []).some(isWildEligible),
+    questionFor: (app) => sourceQuestion("wild", app),
     question:
-      "Will you source anything from the wild or another aquaculture site? Only blue mussel, eastern oyster, sea scallop, green sea urchin and marine algae may be taken from the wild. If so, which species, from which waterbody and health zone, and who's the licensed harvester?",
-    hint: "Wild stock must come from the same health zone as your LPA. American oysters can't come from the Damariscotta, Sheepscot, or Quahog Bay.",
+      "Is anything coming from the wild or from another aquaculture site? If so, I need the waterbody, its health zone, and the licensed harvester's full name and license number. Only blue mussel, American oyster, sea scallop, green sea urchin and marine algae may be taken from the wild.",
+    hint: "Wild stock must come from the same health zone as your LPA. American oysters can't come from the Damariscotta, the Sheepscot, or Quahog Bay.",
     emptyListIsAnswer: true,
   },
   {
@@ -463,7 +657,7 @@ export const LPA_FIELDS: LpaFieldDef[] = [
     label: "Wild take certification",
     question:
       "Can you confirm you understand that wild-collected organisms must comply with all take laws and come from your LPA's health zone?",
-    appliesWhen: (app) => (app.wildStock ?? []).length > 0,
+    appliesWhen: (app) => (app.wildSources ?? []).length > 0,
   },
   {
     key: "scallopAdductorOnlyAcknowledged",
@@ -471,12 +665,13 @@ export const LPA_FIELDS: LpaFieldDef[] = [
     label: "Scallop adductor-only",
     question:
       "Can you confirm that scallops grown here will be sold adductor-only, given that roe-on and whole scallop sales are prohibited on an LPA?",
-    // Matches the enum keys 'bay_scallop' and 'sea_scallop'. Entries are
-    // model-extracted and round-trip through JSONB, so this reads defensively
-    // rather than trusting the schema's shape at runtime.
+    // Matches the enum keys 'bay_scallop' and 'sea_scallop'. Reading the species
+    // list directly is the point of the split: this used to scan both source
+    // tables, so a scallop named before its hatchery was known raised no
+    // certification at all.
     appliesWhen: (app) =>
-      [...(app.hatcheryStock ?? []), ...(app.wildStock ?? [])].some((entry) =>
-        typeof entry?.species === "string" && entry.species.toLowerCase().includes("scallop")
+      (app.species ?? []).some(
+        (species) => typeof species === "string" && species.includes("scallop")
       ),
   },
 
@@ -685,27 +880,80 @@ export function fieldApplies(field: LpaFieldDef, app: LpaApplication): boolean {
 }
 
 /** A "Existing Uses" block counts as answered only when all five parts are filled. */
+/**
+ * An observation is answered once it says whether the use happens at all, plus
+ * something about it if it does.
+ *
+ * Not "every box filled", which was the old rule. Extraction is told to record
+ * the part it was given and leave the rest null, so demanding all five made a
+ * partial answer count as no answer, and the question came back unchanged: the
+ * same shape as the source-table loop found on 2026-08-19. Which boxes are still
+ * blank is reported by `validateApplication`, where an incomplete answer belongs.
+ */
 function isUseObservationAnswered(value: UseObservation | null): boolean {
-  if (!value) return false;
-  return Object.values(value).every((part) => typeof part === "string" && part.trim() !== "");
+  if (!value || typeof value !== "object") return false;
+  if (value.occurs === false) return true;
+  if (value.occurs !== true) return false;
+  return USE_OBSERVATION_BOXES.some((box) => {
+    const part = (value as Record<string, unknown>)[box];
+    return typeof part === "string" && part.trim() !== "";
+  });
+}
+
+/** The form's five boxes for one kind of use, excluding "does it happen at all". */
+export const USE_OBSERVATION_BOXES = [
+  "activityTypes",
+  "seasons",
+  "frequency",
+  "occursWithinSite",
+  "anticipatedImpacts",
+] as const;
+
+/** Boxes still blank on an observation that says the use does happen. */
+export function blankUseObservationBoxes(value: unknown): string[] {
+  const record = value as Record<string, unknown> | null;
+  if (!record || typeof record !== "object" || record.occurs !== true) return [];
+  return USE_OBSERVATION_BOXES.filter((box) => {
+    const part = record[box];
+    return typeof part !== "string" || part.trim() === "";
+  });
 }
 
 /**
- * A stock list is answered when every species in it also names its source. This
- * matters because the extraction model is now told to record a species the
- * moment it hears one, before the applicant has said where it comes from. That
- * partial record must not be mistaken for a finished answer, or the interview
- * would move on and the form would go out with a blank hatchery column.
+ * A source table is answered once nothing is waiting on it.
+ *
+ * Completeness is measured against the species list rather than against the
+ * table's own rows, which is what the split buys. Before it, a species and its
+ * source were one record, so the only way to record "mussels" was to invent a
+ * half-filled row and then remember it was half-filled. Now the question is
+ * simply whether every species named has been placed somewhere.
  */
-function isStockListAnswered(field: LpaFieldDef, value: unknown): boolean {
-  if (!Array.isArray(value)) return false;
-  if (value.length === 0) return Boolean(field.emptyListIsAnswer);
-  const required = field.entryRequires;
-  if (!required) return true;
-  return value.every((entry) => {
-    const source = (entry as Record<string, unknown> | null)?.[required];
-    return typeof source === "string" && source.trim() !== "";
-  });
+function isSourceListAnswered(field: LpaFieldDef, app: LpaApplication): boolean {
+  if (!field.sourceTable) return false;
+  return (
+    speciesAwaitingSource(field.sourceTable, app).length === 0 &&
+    rowsMissingDetail(field.sourceTable, app).length === 0
+  );
+}
+
+/**
+ * Whether the field holds anything worth reading back, which is a lower bar than
+ * being answered.
+ *
+ * "What have I told you so far" is a different question from "what is still
+ * outstanding". A hatchery table with one row filled in and one species still
+ * waiting is not answered, but it plainly holds something, and an applicant
+ * asking which hatchery they named should be told rather than shown nothing.
+ */
+export function fieldHasContent(field: LpaFieldDef, app: LpaApplication): boolean {
+  const value = app[field.key];
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  if (Array.isArray(value)) return value.length > 0 || Boolean(field.emptyListIsAnswer);
+  if (typeof value === "object") {
+    return Object.values(value).some((part) => part !== null && part !== "");
+  }
+  return true;
 }
 
 export function fieldAnswered(field: LpaFieldDef, app: LpaApplication): boolean {
@@ -714,8 +962,8 @@ export function fieldAnswered(field: LpaFieldDef, app: LpaApplication): boolean 
   if (field.kind === "use_observation") {
     return isUseObservationAnswered(value as UseObservation | null);
   }
-  if (field.kind === "stock_list") {
-    return isStockListAnswered(field, value);
+  if (field.kind === "source_list") {
+    return isSourceListAnswered(field, app);
   }
   if (value === null || value === undefined) return false;
   if (Array.isArray(value)) return field.emptyListIsAnswer ? true : value.length > 0;

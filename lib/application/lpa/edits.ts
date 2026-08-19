@@ -28,6 +28,7 @@
  * form fields at all: they're the applicant's own record of which drawings and
  * signatures they've obtained, and the app has no way to check them.
  */
+import { seedSourceRows } from "./normalize";
 import { LPA_REQUIREMENTS } from "./requirements";
 import {
   LpaFormSchema,
@@ -99,5 +100,8 @@ export function applyEdit(
   // the interview has moved on to.
   if (application.pendingConcern === edit.key) next.pendingConcern = null;
 
-  return { application: next };
+  // Ticking a species box on the review screen opens the row its source belongs
+  // in, for the species the form gives no choice about. Same call the interview
+  // makes, so both ways of naming a species behave alike.
+  return { application: seedSourceRows(application, next) };
 }

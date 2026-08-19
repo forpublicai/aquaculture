@@ -25,6 +25,7 @@
  * are the same values as printed on the form.
  */
 import {
+  CultivatedSpecies,
   GearCategory,
   HatcherySpecies,
   NearbyFeature,
@@ -150,6 +151,7 @@ export const OWNER_OPERATOR_EXEMPTION_CHOICES = choicesFrom(
 );
 export const GEAR_CATEGORY_CHOICES = choicesFrom(GearCategory.options, GEAR_CATEGORY_LABELS);
 export const NEARBY_FEATURE_CHOICES = choicesFrom(NearbyFeature.options, NEARBY_FEATURE_LABELS);
+export const CULTIVATED_SPECIES_CHOICES = choicesFrom(CultivatedSpecies.options, SPECIES_LABELS);
 export const HATCHERY_SPECIES_CHOICES = choicesFrom(HatcherySpecies.options, SPECIES_LABELS);
 export const WILD_SPECIES_CHOICES = choicesFrom(WildSpecies.options, SPECIES_LABELS);
 export const REQUIREMENT_STATUS_CHOICES = choicesFrom(
@@ -166,6 +168,12 @@ export const REQUIREMENT_STATUS_CHOICES = choicesFrom(
  * used four times, mirroring `UseObservationSchema`.
  */
 const USE_OBSERVATION_PARTS: RecordPart[] = [
+  {
+    key: "occurs",
+    label: "Does this happen here?",
+    control: { kind: "boolean" },
+    hint: "No is a real answer, and the rest of this block then stays blank.",
+  },
   { key: "activityTypes", label: "Kinds of activity", control: { kind: "textarea" } },
   { key: "seasons", label: "Seasons", control: { kind: "text" } },
   { key: "frequency", label: "How often", control: { kind: "text" } },
@@ -182,32 +190,31 @@ const USE_OBSERVATION_PARTS: RecordPart[] = [
   },
 ];
 
-const HATCHERY_STOCK_PARTS: RecordPart[] = [
+/**
+ * One row of the form's hatchery table. The species is the row's identity, which
+ * is why it is the one required part: a source that names no species is a filled
+ * column against an unchecked box.
+ */
+const HATCHERY_SOURCE_PARTS: RecordPart[] = [
   {
     key: "species",
     label: "Species",
     control: { kind: "choice", choices: HATCHERY_SPECIES_CHOICES },
     required: true,
   },
-  {
-    key: "speciesNote",
-    label: "Species note",
-    control: { kind: "text" },
-    hint: "Name the species here if you picked Other.",
-  },
   { key: "hatcheryName", label: "Hatchery or facility", control: { kind: "text" } },
   { key: "hatcheryAddress", label: "Hatchery address", control: { kind: "text" } },
   { key: "hatcheryPhone", label: "Hatchery phone", control: { kind: "text" } },
 ];
 
-const WILD_STOCK_PARTS: RecordPart[] = [
+/** One row of the form's wild stock table. */
+const WILD_SOURCE_PARTS: RecordPart[] = [
   {
     key: "species",
     label: "Species",
     control: { kind: "choice", choices: WILD_SPECIES_CHOICES },
     required: true,
   },
-  { key: "speciesNote", label: "Species note", control: { kind: "text" } },
   { key: "waterbody", label: "Waterbody harvested from", control: { kind: "text" } },
   {
     key: "healthZone",
@@ -313,8 +320,15 @@ export const LPA_EDITORS: Record<LpaFormKey, Control> = {
   associatedLeaseSiteIds: { kind: "text_list", itemLabel: "Lease site ID" },
 
   /* Species and source of stock */
-  hatcheryStock: { kind: "record_list", itemLabel: "Hatchery species", parts: HATCHERY_STOCK_PARTS },
-  wildStock: { kind: "record_list", itemLabel: "Wild species", parts: WILD_STOCK_PARTS },
+  species: { kind: "choice_list", choices: CULTIVATED_SPECIES_CHOICES },
+  otherSpeciesNote: { kind: "text" },
+  marineAlgaeNote: { kind: "text" },
+  hatcherySources: {
+    kind: "record_list",
+    itemLabel: "Hatchery source",
+    parts: HATCHERY_SOURCE_PARTS,
+  },
+  wildSources: { kind: "record_list", itemLabel: "Wild source", parts: WILD_SOURCE_PARTS },
   wildTakeComplianceAcknowledged: { kind: "boolean" },
   scallopAdductorOnlyAcknowledged: { kind: "boolean" },
 

@@ -42,4 +42,5 @@ htmlcov/
 .gstack/
 
 # Local debugging output
-debug-extraction.log
+debug-extraction*.log
+debug-errors.log
