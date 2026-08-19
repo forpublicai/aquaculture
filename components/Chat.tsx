@@ -11,6 +11,8 @@ import ReactMarkdown from "react-markdown";
 // one does come through it has to render as a table.
 import remarkGfm from "remark-gfm";
 
+import { ApplicationReview } from "@/components/ApplicationReview";
+import { HAIRLINE, MUTED } from "@/components/theme";
 import { Logo } from "@/design-system/components/brand/Logo";
 import { Button } from "@/design-system/components/buttons/Button";
 import { applicationProgress, validateApplication } from "@/lib/application/lpa/progress";
@@ -29,9 +31,6 @@ const FIELD_LABELS: { key: keyof OperationProfile; label: string }[] = [
   { key: "siteAreaSqFt", label: "Site area (sq ft)" },
   { key: "leaseDurationYears", label: "Lease duration (years)" },
 ];
-
-const HAIRLINE = "var(--border-hairline)";
-const MUTED = "var(--pai-gray-800)";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -203,7 +202,13 @@ function ProfilePanel({
  * actually block a submission — the form denies incomplete applications and
  * keeps the fee, so "90% done" is a misleading thing to tell someone.
  */
-function ApplicationPanel({ application }: { application: LpaApplication }) {
+function ApplicationPanel({
+  application,
+  onReview,
+}: {
+  application: LpaApplication;
+  onReview: () => void;
+}) {
   const progress = applicationProgress(application);
   const outstanding = outstandingRequirements(application);
   const issues = validateApplication(application);
@@ -260,6 +265,15 @@ function ApplicationPanel({ application }: { application: LpaApplication }) {
         </div>
       )}
 
+      <button
+        onClick={onReview}
+        className="mb-4 w-full rounded-full border px-3 py-1.5 text-xs font-semibold"
+        style={{ borderColor: HAIRLINE }}
+        title="See the whole application and correct anything that's wrong"
+      >
+        Review and edit
+      </button>
+
       {outstanding.length > 0 && (
         <div>
           <p className="mb-1 text-xs font-semibold">
@@ -290,6 +304,10 @@ export function Chat() {
   const [profile, setProfile] = useState<OperationProfile | null>(null);
   const [routing, setRouting] = useState<RoutingResult | null>(null);
   const [application, setApplication] = useState<LpaApplication | null>(null);
+  // Which of the two main-column views is showing. The review screen is a
+  // second view of the same conversation rather than its own page, so a
+  // question asked in chat and a correction made on the form stay one flow.
+  const [view, setView] = useState<"chat" | "application">("chat");
 
   const { messages, sendMessage, setMessages, regenerate, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
@@ -354,6 +372,9 @@ export function Chat() {
       setRouting(data.routing);
       setApplication(data.application ?? null);
       setMessages(Array.isArray(data.messages) ? data.messages : []);
+      // The conversation being switched to may not have an application at all,
+      // which would leave the review tab selected with nothing behind it.
+      setView("chat");
     })();
 
     return () => {
@@ -420,7 +441,10 @@ export function Chat() {
           {application && (
             <>
               <hr className="my-6" style={{ borderColor: HAIRLINE }} />
-              <ApplicationPanel application={application} />
+              <ApplicationPanel
+                application={application}
+                onReview={() => setView("application")}
+              />
             </>
           )}
         </aside>
@@ -440,6 +464,46 @@ export function Chat() {
             Proof of concept, not a substitute for DMR guidance.
           </p>
 
+          {/*
+            The tabs only appear once there's an application to review. Before
+            triage settles on a license type there is no second view, and an
+            empty tab sitting there invites a click that can't do anything.
+          */}
+          {application && activeId && (
+            <div className="mb-4 flex gap-2">
+              {(
+                [
+                  ["chat", "Chat"],
+                  ["application", "Application"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setView(id)}
+                  className="rounded-full border px-4 py-1.5 text-xs"
+                  style={{
+                    borderColor: HAIRLINE,
+                    fontWeight: view === id ? 600 : 400,
+                    background: view === id ? "var(--surface-subtle)" : undefined,
+                    color: view === id ? undefined : MUTED,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {application && activeId && view === "application" ? (
+            <div className="flex-1 overflow-y-auto">
+              <ApplicationReview
+                application={application}
+                conversationId={activeId}
+                onChange={setApplication}
+              />
+            </div>
+          ) : (
+            <>
           <div className="flex-1 space-y-4 overflow-y-auto">
             <ChatBubble role="assistant" content={GREETING} />
             {messages.map((message) => (
@@ -477,6 +541,8 @@ export function Chat() {
             />
             <Button>{isLoading ? "..." : "SEND"}</Button>
           </form>
+            </>
+          )}
         </main>
       </div>
     </div>

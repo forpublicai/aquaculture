@@ -1,0 +1,732 @@
+{
+  "form": "LPA_Application.pdf",
+  "revision": "03/17/2026",
+  "page": {
+    "width": 612,
+    "height": 792
+  },
+  "fields": {
+    "applicantName": {
+      "page": 7,
+      "rect": [
+        211.3,
+        102.7,
+        553.3,
+        132.0
+      ]
+    },
+    "applicantAddress": {
+      "page": 7,
+      "rect": [
+        211.3,
+        132.0,
+        553.3,
+        159.0
+      ]
+    },
+    "applicantCity": {
+      "page": 7,
+      "rect": [
+        211.3,
+        159.0,
+        553.3,
+        186.0
+      ]
+    },
+    "applicantStateZip": {
+      "page": 7,
+      "rect": [
+        211.3,
+        186.0,
+        553.3,
+        213.0
+      ]
+    },
+    "applicantTelephone": {
+      "page": 7,
+      "rect": [
+        211.3,
+        213.0,
+        553.3,
+        240.0
+      ]
+    },
+    "applicantEmail": {
+      "page": 7,
+      "rect": [
+        211.3,
+        240.0,
+        553.3,
+        267.0
+      ]
+    },
+    "applicantDateOfBirth": {
+      "page": 7,
+      "rect": [
+        211.3,
+        267.0,
+        553.3,
+        305.4
+      ]
+    },
+    "isAssistantOnOtherLpas": {
+      "page": 7,
+      "rect": [
+        211.3,
+        478.3,
+        553.3,
+        516.7
+      ]
+    },
+    "holdsOtherLpaLicenses": {
+      "page": 7,
+      "rect": [
+        211.3,
+        478.3,
+        553.3,
+        516.7
+      ]
+    },
+    "primaryAssistantName": {
+      "page": 8,
+      "rect": [
+        211.3,
+        204.6,
+        553.3,
+        233.9
+      ]
+    },
+    "primaryAssistantEmail": {
+      "page": 8,
+      "rect": [
+        211.3,
+        233.9,
+        553.3,
+        263.2
+      ]
+    },
+    "town": {
+      "page": 9,
+      "rect": [
+        233.8,
+        65.0,
+        553.3,
+        86.6
+      ]
+    },
+    "county": {
+      "page": 9,
+      "rect": [
+        233.8,
+        86.6,
+        553.3,
+        108.2
+      ]
+    },
+    "waterbody": {
+      "page": 9,
+      "rect": [
+        233.8,
+        108.2,
+        553.3,
+        134.4
+      ]
+    },
+    "siteDescription": {
+      "page": 9,
+      "rect": [
+        233.8,
+        134.4,
+        553.3,
+        161.4
+      ]
+    },
+    "latitude": {
+      "page": 9,
+      "rect": [
+        278.8,
+        161.4,
+        382.3,
+        187.2
+      ]
+    },
+    "longitude": {
+      "page": 9,
+      "rect": [
+        436.3,
+        161.4,
+        553.3,
+        187.2
+      ]
+    },
+    "lpaHealthZone": {
+      "page": 9,
+      "rect": [
+        233.8,
+        187.2,
+        553.3,
+        238.2
+      ]
+    },
+    "growingAreaDesignation": {
+      "page": 9,
+      "rect": [
+        314.8,
+        470.8,
+        553.3,
+        509.3
+      ]
+    },
+    "uplandsDescription": {
+      "page": 12,
+      "rect": [
+        44.8,
+        93.8,
+        512.5,
+        112.2
+      ]
+    },
+    "bottomCharacteristics": {
+      "page": 12,
+      "rect": [
+        44.8,
+        139.2,
+        512.5,
+        152.3
+      ]
+    }
+  },
+  "checkboxes": {
+    "hasPreviouslyAppliedForSite.true": {
+      "page": 7,
+      "rect": [
+        259.5,
+        322.4,
+        267.1,
+        330.0
+      ]
+    },
+    "hasPreviouslyAppliedForSite.false": {
+      "page": 7,
+      "rect": [
+        217.5,
+        322.4,
+        225.1,
+        330.0
+      ]
+    },
+    "paymentType.check": {
+      "page": 7,
+      "rect": [
+        217.5,
+        362.8,
+        225.1,
+        370.4
+      ]
+    },
+    "paymentType.credit_card": {
+      "page": 7,
+      "rect": [
+        370.9,
+        362.8,
+        378.5,
+        370.4
+      ]
+    },
+    "ownerOperatorExemption.lease_in_own_name": {
+      "page": 8,
+      "rect": [
+        217.5,
+        329.9,
+        225.1,
+        337.5
+      ]
+    },
+    "ownerOperatorExemption.ownership_interest_50_plus": {
+      "page": 8,
+      "rect": [
+        217.5,
+        387.8,
+        225.1,
+        395.4
+      ]
+    },
+    "ownerOperatorExemption.applied_for_lease_own_name": {
+      "page": 8,
+      "rect": [
+        217.5,
+        536.1,
+        225.1,
+        543.7
+      ]
+    },
+    "ownerOperatorExemption.ownership_interest_in_applicant_company": {
+      "page": 8,
+      "rect": [
+        217.5,
+        608.4,
+        225.1,
+        616.0
+      ]
+    },
+    "ownerOperatorExemption.upweller_only": {
+      "page": 8,
+      "rect": [
+        217.5,
+        680.8,
+        225.1,
+        688.4
+      ]
+    },
+    "isAboveMeanLowWater.true": {
+      "page": 9,
+      "rect": [
+        240.1,
+        248.6,
+        247.7,
+        256.2
+      ]
+    },
+    "isAboveMeanLowWater.false": {
+      "page": 9,
+      "rect": [
+        277.8,
+        248.6,
+        285.4,
+        256.2
+      ]
+    },
+    "purpose.commercial": {
+      "page": 9,
+      "rect": [
+        240.1,
+        360.0,
+        247.7,
+        367.6
+      ]
+    },
+    "purpose.recreational": {
+      "page": 9,
+      "rect": [
+        240.1,
+        374.6,
+        247.7,
+        382.2
+      ]
+    },
+    "purpose.scientific": {
+      "page": 9,
+      "rect": [
+        240.1,
+        389.2,
+        247.7,
+        396.8
+      ]
+    },
+    "purpose.educational": {
+      "page": 9,
+      "rect": [
+        240.1,
+        404.0,
+        247.7,
+        411.6
+      ]
+    },
+    "restrictedAreaRequirementsAcknowledged.true": {
+      "page": 9,
+      "rect": [
+        404.4,
+        526.2,
+        412.0,
+        533.8
+      ]
+    },
+    "isInEssentialHabitat.true": {
+      "page": 12,
+      "rect": [
+        51.1,
+        221.6,
+        58.7,
+        229.2
+      ]
+    },
+    "isInEssentialHabitat.false": {
+      "page": 12,
+      "rect": [
+        88.8,
+        221.6,
+        96.4,
+        229.2
+      ]
+    },
+    "hasEagleNestWithin660Ft.true": {
+      "page": 12,
+      "rect": [
+        51.1,
+        221.6,
+        58.7,
+        229.2
+      ]
+    },
+    "hasEagleNestWithin660Ft.false": {
+      "page": 12,
+      "rect": [
+        88.8,
+        221.6,
+        96.4,
+        229.2
+      ]
+    },
+    "hatcherySpecies.blue_mussel": {
+      "page": 10,
+      "rect": [
+        52.9,
+        234.4,
+        67.7,
+        248.8
+      ]
+    },
+    "hatcherySpecies.eastern_oyster": {
+      "page": 10,
+      "rect": [
+        52.9,
+        261.0,
+        67.7,
+        275.4
+      ]
+    },
+    "hatcherySpecies.hard_clam_quahog": {
+      "page": 10,
+      "rect": [
+        52.9,
+        287.4,
+        67.7,
+        301.8
+      ]
+    },
+    "hatcherySpecies.soft_shelled_clam": {
+      "page": 10,
+      "rect": [
+        52.9,
+        313.9,
+        67.7,
+        328.3
+      ]
+    },
+    "hatcherySpecies.atlantic_surf_clam": {
+      "page": 10,
+      "rect": [
+        52.9,
+        340.4,
+        67.7,
+        354.8
+      ]
+    },
+    "hatcherySpecies.arctic_surf_clam": {
+      "page": 10,
+      "rect": [
+        52.9,
+        366.9,
+        67.7,
+        381.3
+      ]
+    },
+    "hatcherySpecies.razor_clam": {
+      "page": 10,
+      "rect": [
+        52.9,
+        393.4,
+        67.7,
+        407.8
+      ]
+    },
+    "hatcherySpecies.green_sea_urchin": {
+      "page": 10,
+      "rect": [
+        52.9,
+        419.8,
+        67.7,
+        434.2
+      ]
+    },
+    "hatcherySpecies.bay_scallop": {
+      "page": 10,
+      "rect": [
+        52.9,
+        447.8,
+        67.7,
+        462.2
+      ]
+    },
+    "hatcherySpecies.sugar_kelp": {
+      "page": 10,
+      "rect": [
+        52.9,
+        479.2,
+        67.7,
+        493.6
+      ]
+    },
+    "hatcherySpecies.skinny_kelp": {
+      "page": 10,
+      "rect": [
+        52.9,
+        510.8,
+        67.7,
+        525.2
+      ]
+    },
+    "hatcherySpecies.horsetail_kelp": {
+      "page": 10,
+      "rect": [
+        52.9,
+        542.2,
+        67.7,
+        556.6
+      ]
+    },
+    "hatcherySpecies.winged_kelp": {
+      "page": 10,
+      "rect": [
+        52.9,
+        573.8,
+        67.7,
+        588.2
+      ]
+    },
+    "hatcherySpecies.dulse": {
+      "page": 10,
+      "rect": [
+        52.9,
+        605.2,
+        67.7,
+        619.6
+      ]
+    },
+    "hatcherySpecies.european_oyster": {
+      "page": 10,
+      "rect": [
+        52.9,
+        636.8,
+        67.7,
+        651.2
+      ]
+    },
+    "hatcherySpecies.other": {
+      "page": 10,
+      "rect": [
+        52.9,
+        668.2,
+        67.7,
+        682.6
+      ]
+    },
+    "wildSpecies.blue_mussel": {
+      "page": 11,
+      "rect": [
+        52.9,
+        198.0,
+        67.7,
+        212.4
+      ]
+    },
+    "wildSpecies.eastern_oyster": {
+      "page": 11,
+      "rect": [
+        52.9,
+        247.4,
+        67.7,
+        261.8
+      ]
+    },
+    "wildSpecies.sea_scallop": {
+      "page": 11,
+      "rect": [
+        52.9,
+        297.0,
+        67.7,
+        311.4
+      ]
+    },
+    "wildSpecies.green_sea_urchin": {
+      "page": 11,
+      "rect": [
+        52.9,
+        346.4,
+        67.7,
+        360.8
+      ]
+    },
+    "wildSpecies.marine_algae": {
+      "page": 11,
+      "rect": [
+        52.9,
+        400.4,
+        67.7,
+        414.8
+      ]
+    },
+    "gearCategories.no_gear_bottom_culture": {
+      "page": 16,
+      "rect": [
+        92.7,
+        475.1,
+        100.3,
+        482.7
+      ]
+    },
+    "gearCategories.upweller": {
+      "page": 16,
+      "rect": [
+        92.7,
+        488.1,
+        100.3,
+        495.7
+      ]
+    },
+    "gearCategories.shellfish_rafts": {
+      "page": 16,
+      "rect": [
+        92.8,
+        500.7,
+        100.4,
+        508.3
+      ]
+    },
+    "gearCategories.tray_racks_and_overwintering_cages": {
+      "page": 16,
+      "rect": [
+        92.8,
+        513.4,
+        100.4,
+        521.0
+      ]
+    },
+    "gearCategories.soft_or_semi_rigid_bags_or_floating_trays": {
+      "page": 16,
+      "rect": [
+        92.8,
+        526.0,
+        100.4,
+        533.6
+      ]
+    },
+    "gearCategories.lantern_or_pearl_nets": {
+      "page": 16,
+      "rect": [
+        92.8,
+        538.6,
+        100.4,
+        546.2
+      ]
+    },
+    "gearCategories.scallop_spat_collector_bags": {
+      "page": 16,
+      "rect": [
+        92.8,
+        551.2,
+        100.4,
+        558.8
+      ]
+    },
+    "gearCategories.scallop_ear_hangers": {
+      "page": 16,
+      "rect": [
+        92.8,
+        563.8,
+        100.4,
+        571.4
+      ]
+    },
+    "gearCategories.marine_algae_gear": {
+      "page": 16,
+      "rect": [
+        92.8,
+        576.4,
+        100.4,
+        584.0
+      ]
+    },
+    "gearCategories.bottom_anti_predator_netting": {
+      "page": 16,
+      "rect": [
+        92.8,
+        589.0,
+        100.4,
+        596.6
+      ]
+    },
+    "nearbyFeatures.federal_navigation_project_or_anchorage": {
+      "page": 14,
+      "rect": [
+        87.1,
+        401.7,
+        94.7,
+        409.3
+      ]
+    },
+    "nearbyFeatures.navigational_channel": {
+      "page": 14,
+      "rect": [
+        87.1,
+        468.4,
+        94.7,
+        476.0
+      ]
+    },
+    "nearbyFeatures.structures": {
+      "page": 14,
+      "rect": [
+        87.1,
+        535.1,
+        94.7,
+        542.7
+      ]
+    },
+    "nearbyFeatures.aquaculture_leases_or_lpas": {
+      "page": 14,
+      "rect": [
+        87.1,
+        614.4,
+        94.7,
+        622.0
+      ]
+    },
+    "nearbyFeatures.anchorages_or_moorings": {
+      "page": 15,
+      "rect": [
+        87.1,
+        39.9,
+        94.7,
+        47.5
+      ]
+    },
+    "nearbyFeatures.state_or_federal_beach": {
+      "page": 15,
+      "rect": [
+        87.1,
+        119.2,
+        94.7,
+        126.8
+      ]
+    },
+    "nearbyFeatures.docking_facility": {
+      "page": 15,
+      "rect": [
+        87.1,
+        198.6,
+        94.7,
+        206.2
+      ]
+    },
+    "hasNoNearbyFeatures.true": {
+      "page": 15,
+      "rect": [
+        87.1,
+        278.0,
+        94.7,
+        285.6
+      ]
+    }
+  }
+}

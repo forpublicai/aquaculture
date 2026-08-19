@@ -35,12 +35,16 @@ import {
   type LpaFieldDef,
   type SectionId,
 } from "./fields";
+import { parseCoordinate, type Axis } from "./coordinates";
+import { seedSourceRows } from "./normalize";
 import { checkPlausibility } from "./plausibility";
 import { applicationProgress, validateApplication, type ValidationIssue } from "./progress";
 import { outstandingRequirements } from "./requirements";
 import {
   EMPTY_LPA_APPLICATION,
+  EMPTY_USE_OBSERVATION,
   LpaFormSchema,
+  UseObservationSchema,
   type LpaApplication,
   type LpaForm,
   type LpaFormKey,
@@ -90,8 +94,9 @@ const AMBIGUITIES_KEY = "ambiguousValues";
  * with other questions produces a wall of text nobody answers completely.
  */
 const ASKED_ALONE: ReadonlySet<LpaFormKey> = new Set<LpaFormKey>([
-  "hatcheryStock",
-  "wildStock",
+  "species",
+  "hatcherySources",
+  "wildSources",
   "gearItems",
   "gearCategories",
   "nearbyFeatures",
@@ -154,7 +159,10 @@ export interface ApplicationAsk {
  * order and groups consecutive short questions from the same section.
  */
 export function nextAsk(app: LpaApplication): ApplicationAsk | null {
-  const missing = LPA_FIELDS.filter((field) => fieldApplies(field, app) && !fieldAnswered(field, app));
+  const deferred = new Set(app.deferredFields ?? []);
+  const missing = LPA_FIELDS.filter(
+    (field) => fieldApplies(field, app) && !fieldAnswered(field, app) && !deferred.has(field.key)
+  );
   const first = missing[0];
   if (!first) return null;
 
@@ -174,13 +182,126 @@ export function nextAsk(app: LpaApplication): ApplicationAsk | null {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Fields the extraction model is asked for in a different shape than the form
+ * stores them, because the applicant's wording needs converting in code.
+ *
+ * The form wants coordinates as decimal degrees and says so. Applicants read
+ * theirs off a chartplotter, which shows degrees, minutes and seconds. Asking
+ * for a number means the model either does the arithmetic silently, which this
+ * codebase has decided repeatedly not to trust a model with, or returns null
+ * because the instructions tell it never to invent a value. Either way the
+ * answer is lost. So the field is widened to accept their exact wording, and
+ * `COERCIONS` turns it into a number where the sums can be read and tested.
+ */
+function coordinateField(axis: Axis) {
+  return z
+    .union([z.number(), z.string()])
+    .nullable()
+    .describe(
+      `The site's ${axis} for its center point. If the applicant already gave ` +
+        "decimal degrees, return the number, negative for west and south. If they " +
+        "gave any other format, degrees and minutes and seconds for instance, " +
+        "return their wording exactly as a string and it will be converted. Do " +
+        "not do the conversion yourself."
+    );
+}
+
+/**
+ * One of the form's four existing-use blocks, in the shape the model answers in.
+ *
+ * Asked whether there is any boating around the site and told there is none, the
+ * model returns `false`. Not a five-part record with `occurs` false: just
+ * `false`. It did that before `occurs` existed, and it kept doing it afterwards,
+ * through an instruction telling it not to. Which is fair enough. "No boating
+ * happens near my site" is a yes/no answer, the field is the only place to put
+ * it, and the instructions elsewhere say to record "none" as false.
+ *
+ * So the schema now says what the model already does. A boolean is accepted and
+ * `asUseObservation` expands it, in code, into the record the form stores. This
+ * is not inventing an answer: for a block whose first question is whether the use
+ * happens at all, `false` has exactly one reading.
+ *
+ * Partial records are accepted for the same reason. A model that says "there is
+ * none" has nothing to say about the five boxes underneath and should not have to
+ * write five nulls to be understood.
+ */
+function useObservationField() {
+  return z
+    .union([UseObservationSchema.partial(), z.boolean()])
+    .nullable()
+    .describe(
+      "What the applicant has observed of this kind of use on or around the " +
+        "site. Answer with the record. If they say there is none of it, false on " +
+        "its own is accepted and means the same as the record with 'occurs' " +
+        "false. Leave out, or set null, any part they said nothing about. Null " +
+        "for the whole field means they did not mention this kind of use."
+    );
+}
+
+/**
+ * A use observation from whatever the model sent.
+ *
+ * Returns null for anything that says nothing, rather than an empty record,
+ * because the merge writes any non-null value: an all-null record would overwrite
+ * a real answer given on an earlier turn with nothing at all.
+ */
+function asUseObservation(value: unknown): unknown {
+  if (typeof value === "boolean") return { ...EMPTY_USE_OBSERVATION, occurs: value };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const observation = { ...EMPTY_USE_OBSERVATION, ...(value as Record<string, unknown>) };
+  const saysSomething =
+    typeof observation.occurs === "boolean" ||
+    Object.values(observation).some((part) => typeof part === "string" && part.trim() !== "");
+  return saysSomething ? observation : null;
+}
+
+const USE_OBSERVATION_FIELDS = [
+  "commercialFishingUse",
+  "recreationalFishingUse",
+  "boatingUse",
+  "otherWaterUse",
+] as const;
+
+const EXTRACTION_OVERRIDES: Partial<Record<LpaFormKey, z.ZodTypeAny>> = {
+  latitude: coordinateField("latitude"),
+  longitude: coordinateField("longitude"),
+  ...Object.fromEntries(USE_OBSERVATION_FIELDS.map((key) => [key, useObservationField()])),
+};
+
+/**
+ * Turns what the model returned into what the form stores.
+ *
+ * A value that can't be converted becomes null, which leaves the field
+ * unanswered and gets it asked again. That is the right outcome: a coordinate
+ * read wrongly looks answered, is never revisited, and goes out on the
+ * application pointing at open water.
+ */
+const COERCIONS: Partial<Record<LpaFormKey, (value: unknown) => unknown>> = {
+  latitude: (value) => parseCoordinate(value, "latitude"),
+  longitude: (value) => parseCoordinate(value, "longitude"),
+  ...Object.fromEntries(USE_OBSERVATION_FIELDS.map((key) => [key, asUseObservation])),
+};
+
+/** The shape one field is asked for, which may differ from the shape it stores. */
+export function extractionShapeFor(key: LpaFormKey): z.ZodTypeAny {
+  return EXTRACTION_OVERRIDES[key] ?? LpaFormSchema.shape[key];
+}
+
+/** Turns what the model returned for one field into what the form stores. */
+export function coerceExtracted(key: LpaFormKey, value: unknown): unknown {
+  const coerce = COERCIONS[key];
+  return coerce ? coerce(value) : value;
+}
+
+/**
  * A Zod object covering just the given fields, built from the full form schema
  * so descriptions and types stay in one place. Built by hand rather than with
  * `.pick()` because the key set is only known at runtime.
  */
 function schemaForFields(keys: LpaFormKey[]) {
   const shape: Record<string, z.ZodTypeAny> = {};
-  for (const key of keys) shape[key] = LpaFormSchema.shape[key];
+  for (const key of keys) shape[key] = extractionShapeFor(key);
   shape[OTHER_SECTIONS_KEY] = z
     .array(z.enum(SECTION_IDS))
     .describe(
@@ -227,7 +348,10 @@ Map what the applicant said onto the closest one using those definitions. That i
 not guessing, it is the whole point of the list, so only leave such a field null \
 when they haven't addressed the question at all.
 - "None", "no", "not applicable" are real answers. Record them as an empty list \
-for a list field, or false for a yes/no field, rather than leaving null.
+for a list field, or false for a yes/no field, rather than leaving null. For a \
+field that is a record of several parts, use the part that asks whether the thing \
+happens at all, and leave the other parts null. Each field's own description says \
+what it will accept; follow that description rather than guessing at a shape.
 - When a fixed list is involved and the applicant's wording fits more than one \
 allowed value, do NOT choose for them. Leave the value out and add an entry to \
 "${AMBIGUITIES_KEY}" with a question naming the options. Someone saying "clams" \
@@ -260,6 +384,136 @@ given. List a section only when the applicant has actually stated something that
 belongs to it, not merely alluded to it.`;
 
 /**
+ * The object the model returned, dug out of a validation failure.
+ *
+ * `generateObject` throws when the output doesn't match, and the parsed object is
+ * carried on the error rather than returned. It sits a couple of `cause` links
+ * down, so this walks the chain instead of reaching for a fixed path.
+ */
+export function rejectedObject(error: unknown): Record<string, unknown> | null {
+  const seen = new Set<unknown>();
+  let node: unknown = error;
+  while (node && typeof node === "object" && !seen.has(node)) {
+    seen.add(node);
+    const value = (node as { value?: unknown }).value;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    node = (node as { cause?: unknown }).cause;
+  }
+  return null;
+}
+
+/**
+ * Steps past `.nullable()` and `.optional()` to the schema underneath.
+ *
+ * Only those wrappers, chosen by name. `unwrap()` is not the "take the wrapper
+ * off" method it looks like: `ZodArray` has one too, and it returns the *element*
+ * type, so calling it blindly walks straight through a list into the shape of one
+ * of its rows. That silently turned the gap-filling below into a no-op for every
+ * list on the form.
+ */
+const WRAPPERS = new Set(["nullable", "optional", "default", "readonly"]);
+
+function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
+  let node = schema;
+  // Bounded rather than `while (true)`: a malformed schema must not hang a turn.
+  for (let depth = 0; depth < 10; depth += 1) {
+    const type = (node as { def?: { type?: string } }).def?.type;
+    if (!type || !WRAPPERS.has(type)) break;
+    const inner = (node as { unwrap?: () => z.ZodTypeAny }).unwrap?.();
+    if (!inner || inner === node) break;
+    node = inner;
+  }
+  return node;
+}
+
+/**
+ * Writes null into every key the schema expects and the model left out.
+ *
+ * The form's records are all-nullable objects, which makes every key *required*
+ * in the JSON schema with a null allowed in each. A model answering "there is no
+ * commercial fishing here" writes `{"occurs": false}` and stops, because it has
+ * nothing to say about the other five boxes, and that is rejected for missing
+ * keys. The answer was right; only its completeness was not.
+ *
+ * Absent and null already mean the same thing to the merge, which skips both as
+ * "not mentioned". So filling the gaps is not a guess about what the applicant
+ * said. It writes down the reading the rest of this file already takes.
+ */
+export function fillMissing(value: unknown, schema: z.ZodTypeAny): unknown {
+  const inner = unwrapSchema(schema);
+
+  const shape = (inner as { shape?: Record<string, z.ZodTypeAny> }).shape;
+  if (shape && value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    const filled: Record<string, unknown> = {};
+    for (const [key, field] of Object.entries(shape)) {
+      filled[key] = key in record ? fillMissing(record[key], field) : null;
+    }
+    return filled;
+  }
+
+  const element = (inner as { element?: z.ZodTypeAny }).element;
+  if (element && Array.isArray(value)) return value.map((item) => fillMissing(item, element));
+
+  return value;
+}
+
+/**
+ * Extraction that survives the model getting one field's shape wrong.
+ *
+ * `generateObject` validates the whole object and throws if any part of it
+ * fails, so a single malformed field discarded everything the applicant had just
+ * said. That happened: told "none" for the existing-uses section, the model
+ * returned `false` for four five-part records, and the turn was lost along with
+ * the two fields it had got right.
+ *
+ * The strict schema is still what the model is asked for, because it is what
+ * guides the output. What changes is the handling of a rejection: each field is
+ * re-validated on its own and the ones that parse are kept. A bad field now costs
+ * that field, which gets asked again, rather than the turn.
+ *
+ * If nothing at all can be salvaged the error is rethrown, because at that point
+ * the applicant genuinely needs to be told.
+ */
+export interface Salvage {
+  /** Exactly what the model sent, before any repair. */
+  rejected: unknown;
+  /** Fields that still would not parse, and so were dropped. */
+  dropped: string[];
+}
+
+async function generateExtraction(
+  schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
+  keys: LpaFormKey[],
+  options: Parameters<typeof generateObject>[0]
+): Promise<{ object: Record<string, unknown>; salvage: Salvage | null }> {
+  try {
+    const { object } = await generateObject(options);
+    return { object: object as Record<string, unknown>, salvage: null };
+  } catch (error) {
+    const returned = rejectedObject(error);
+    if (!returned) throw error;
+
+    const repaired = fillMissing(returned, schema) as Record<string, unknown>;
+    const kept: Record<string, unknown> = {};
+    const dropped: string[] = [];
+    for (const [key, field] of Object.entries(schema.shape)) {
+      const parsed = field.safeParse(repaired[key]);
+      if (parsed.success) kept[key] = parsed.data;
+      else if (keys.includes(key as LpaFormKey)) dropped.push(key);
+    }
+    if (Object.keys(kept).length === 0) throw error;
+
+    if (dropped.length > 0) {
+      console.warn(`[extraction] dropped fields the model got wrong: ${dropped.join(", ")}`);
+    }
+    return { object: kept, salvage: { rejected: returned, dropped } };
+  }
+}
+
+/**
  * Runs one extraction pass over the section being discussed. Returns the merged
  * application — values already present survive unless the model supplies a new
  * one.
@@ -283,7 +537,7 @@ async function extractSection(
   const current = Object.fromEntries(keys.map((key) => [key, app[key]]));
 
   const schema = schemaForFields(keys);
-  const { object } = await generateObject({
+  const { object, salvage } = await generateExtraction(schema, keys, {
     model: chatModel,
     schema,
     instructions: EXTRACTION_INSTRUCTIONS,
@@ -311,6 +565,11 @@ async function extractSection(
           fieldsOffered: keys,
           userMessage,
           returned: extracted,
+          // What the model actually sent, when that needed repairing. Without
+          // this the log showed a field simply absent, with no way to tell
+          // whether the model had skipped it or got its shape wrong.
+          rejectedBySchema: salvage?.rejected,
+          droppedAfterRepair: salvage?.dropped,
           jsonSchemaSent: z.toJSONSchema(schema),
         },
         null,
@@ -323,9 +582,11 @@ async function extractSection(
   const merged: LpaApplication = { ...app };
   const changed: LpaFormKey[] = [];
   for (const key of keys) {
-    const value = extracted[key];
+    const value = coerceExtracted(key, extracted[key]);
     // Null means "not mentioned", not "clear this field". The model only saw
     // one section and one message, so it is never authoritative about absence.
+    // A coercion that failed also lands here, so an unreadable coordinate is
+    // asked again rather than stored as something it isn't.
     if (value === null || value === undefined) continue;
     if (JSON.stringify(value) !== JSON.stringify(app[key])) changed.push(key);
     (merged as Record<string, unknown>)[key] = value;
@@ -357,7 +618,10 @@ async function extractSection(
         .filter((entry) => entry.question !== "" && keys.includes(entry.field))
     : [];
 
-  return { merged, changed, alsoMentions, ambiguities };
+  // Seeded after `changed` is taken, deliberately: an opened row is the app's
+  // own doing, and flagging it as changed would put it in front of the
+  // plausibility check to be argued about.
+  return { merged: seedSourceRows(app, merged), changed, alsoMentions, ambiguities };
 }
 
 /**
@@ -387,7 +651,8 @@ async function applyRevisions(
 /* Message formatting                                                          */
 /* -------------------------------------------------------------------------- */
 
-function formatAsk(ask: ApplicationAsk, includeSectionHeader: boolean): string {
+function formatAsk(app: LpaApplication, ask: ApplicationAsk, includeSectionHeader: boolean): string {
+  const wording = (field: LpaFieldDef) => field.questionFor?.(app) ?? field.question;
   const section = sectionById(ask.section);
   const lines: string[] = [];
 
@@ -397,13 +662,13 @@ function formatAsk(ask: ApplicationAsk, includeSectionHeader: boolean): string {
 
   if (ask.fields.length === 1) {
     const [field] = ask.fields;
-    lines.push(field.question);
+    lines.push(wording(field));
     if (field.hint) lines.push("", `*${field.hint}*`);
     return lines.join("\n");
   }
 
   for (const field of ask.fields) {
-    lines.push(`- ${field.question}`);
+    lines.push(`- ${wording(field)}`);
   }
   // A blank line between each: consecutive lines collapse into one paragraph in
   // markdown, which ran all three hints together into a wall of text.
@@ -425,16 +690,35 @@ function formatIssues(issues: ValidationIssue[]): string {
  */
 export function pendingQuestionText(app: LpaApplication): string | null {
   const ask = nextAsk(app);
-  return ask ? formatAsk(ask, false) : null;
+  return ask ? formatAsk(app, ask, false) : null;
 }
 
 /** What to say once every question has an answer. */
 export function formatCompletion(app: LpaApplication): string {
   const outstanding = outstandingRequirements(app);
+  const setAside = LPA_FIELDS.filter(
+    (field) => (app.deferredFields ?? []).includes(field.key) && fieldApplies(field, app)
+  );
+
   const lines = [
-    "That's every question on the LPA application form answered. " +
-      "You can review the whole application and correct anything that's off.",
+    setAside.length === 0
+      ? "That's every question on the LPA application form answered. " +
+        "You can review the whole application and correct anything that's off."
+      : "That's as far as I can get by asking. You can review the whole " +
+        "application and correct anything that's off.",
   ];
+
+  // Named rather than quietly left blank. The interview stopped asking about
+  // these; the form still wants them.
+  if (setAside.length > 0) {
+    lines.push(
+      "",
+      "**Set aside as we went.** I couldn't get an answer to these, so they're " +
+        "still blank. You can fill them in on the Application tab, or tell me now:",
+      "",
+      ...setAside.map((field) => `- **${field.label}.** ${field.question}`)
+    );
+  }
 
   if (outstanding.length > 0) {
     lines.push(
@@ -468,7 +752,7 @@ export function formatIntakeIntro(app: LpaApplication): string {
       "You can stop and ask me a regulatory question at any point, and we'll pick up where we left off.",
     "",
   ];
-  if (ask) lines.push(formatAsk(ask, true));
+  if (ask) lines.push(formatAsk(app, ask, true));
   return lines.join("\n");
 }
 
@@ -578,14 +862,42 @@ export async function runApplicationTurn(
   }
 
   const madeProgress = !askBefore || askAfter.fields[0].key !== askBefore.fields[0].key;
-  // Only apologize when the message genuinely produced nothing. Partially
+  // Only treat a turn as empty when it genuinely produced nothing. Partially
   // answering a question (a species without its hatchery) leaves the same
   // question outstanding, but something was recorded and saying otherwise reads
   // as the app ignoring them.
-  if (!madeProgress && !queried && changed.length === 0) {
+  const producedNothing = !madeProgress && !queried && changed.length === 0;
+  const stuckField = askAfter.fields[0].key;
+
+  if (producedNothing && updated.stalledOn === stuckField) {
+    // Asked twice, nothing either time. Asking a third time is how an interview
+    // becomes a loop the applicant cannot get out of, so the field is set aside
+    // and the form moves on. It stays missing everywhere that counts.
+    const setAside: LpaApplication = {
+      ...updated,
+      deferredFields: [...new Set([...updated.deferredFields, stuckField])],
+      stalledOn: null,
+    };
+    const label = fieldByKey(stuckField)?.label?.toLowerCase() ?? "that";
+    parts.push(
+      `I'm not getting anywhere with ${label}, so let's leave it and come back. ` +
+        "You can fill it in on the Application tab whenever you like, or just tell me later."
+    );
+
+    const askNext = nextAsk(setAside);
+    if (!askNext) {
+      parts.push(formatCompletion(setAside));
+      return { application: setAside, reply: parts.join("\n\n") };
+    }
+    parts.push(formatAsk(setAside, askNext, askNext.section !== askAfter.section));
+    return { application: setAside, reply: parts.join("\n\n") };
+  }
+
+  const carried: LpaApplication = { ...updated, stalledOn: producedNothing ? stuckField : null };
+  if (producedNothing) {
     parts.push("Sorry, I didn't catch an answer to that one. Let me try again.");
   }
 
-  parts.push(formatAsk(askAfter, madeProgress && askAfter.section !== askBefore?.section));
-  return { application: updated, reply: parts.join("\n\n") };
+  parts.push(formatAsk(carried, askAfter, madeProgress && askAfter.section !== askBefore?.section));
+  return { application: carried, reply: parts.join("\n\n") };
 }

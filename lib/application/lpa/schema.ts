@@ -159,8 +159,65 @@ const WILD_SPECIES = [
   "marine_algae",
 ] as const;
 
+/**
+ * Everything the form lets you cultivate, which is the two printed lists taken
+ * together, in the order they appear.
+ *
+ * This is the list the applicant answers first, and it is the one question in
+ * this section that is about the species rather than about where it comes from.
+ * Which of the two tables a species ends up in is a fact about its source, and
+ * three species are printed on both, so it cannot be settled by naming a
+ * species. Splitting them is the whole point: people say what they are growing
+ * long before they know which hatchery they are buying from.
+ */
+const CULTIVATED_SPECIES = [
+  "blue_mussel",
+  "eastern_oyster",
+  "hard_clam_quahog",
+  "soft_shelled_clam",
+  "atlantic_surf_clam",
+  "arctic_surf_clam",
+  "razor_clam",
+  "green_sea_urchin",
+  "bay_scallop",
+  "sea_scallop",
+  "sugar_kelp",
+  "skinny_kelp",
+  "horsetail_kelp",
+  "winged_kelp",
+  "dulse",
+  "marine_algae",
+  "european_oyster",
+  "other",
+] as const;
+
 export const HatcherySpecies = z.enum(HATCHERY_SPECIES);
 export const WildSpecies = z.enum(WILD_SPECIES);
+export const CultivatedSpecies = z.enum(CULTIVATED_SPECIES);
+
+/** Whether the species is printed on the hatchery table, the wild table, or both. */
+export function isHatcheryEligible(species: string): boolean {
+  return (HATCHERY_SPECIES as readonly string[]).includes(species);
+}
+export function isWildEligible(species: string): boolean {
+  return (WILD_SPECIES as readonly string[]).includes(species);
+}
+
+/**
+ * The table a species can only belong to, when there is only one.
+ *
+ * Blue mussel, American oyster and green sea urchin are printed on both tables,
+ * so naming one of those settles nothing and the applicant has to be asked.
+ * Everything else is printed on exactly one, so naming it also places its
+ * source, which is what lets the interview stop asking a question it can
+ * already answer.
+ */
+export function soleTableFor(species: string): "hatchery" | "wild" | null {
+  const hatchery = isHatcheryEligible(species);
+  const wild = isWildEligible(species);
+  if (hatchery === wild) return null;
+  return hatchery ? "hatchery" : "wild";
+}
 
 /** Printed names from the form, for the model, the review screen and the output. */
 export const SPECIES_LABELS: Record<string, string> = {
@@ -190,6 +247,11 @@ export function speciesLabel(key: string | null | undefined): string {
   return SPECIES_LABELS[key] ?? key;
 }
 
+/** The printed name without its scientific name, for reading mid-sentence. */
+export function speciesShortLabel(key: string): string {
+  return speciesLabel(key).replace(/\s*\(.*\)$/, "");
+}
+
 function speciesGlossary(keys: readonly string[]): string {
   return keys.map((key) => `'${key}': ${SPECIES_LABELS[key]}.`).join(" ");
 }
@@ -198,6 +260,13 @@ const HATCHERY_SPECIES_VALUES =
   `${speciesGlossary(HATCHERY_SPECIES)} ` +
   "Note there is no approved hatchery for European oyster at present. " +
   "Use 'other' only when the species genuinely isn't on this list.";
+
+const CULTIVATED_SPECIES_VALUES =
+  `${speciesGlossary(CULTIVATED_SPECIES)} ` +
+  "Record what they are growing as soon as they name it, without waiting to " +
+  "learn where it comes from. Blue mussel, American/eastern oyster and green " +
+  "sea urchin may be either hatchery-raised or taken from the wild, and that is " +
+  "asked separately, so naming one of those here settles nothing about its source.";
 
 const WILD_SPECIES_VALUES =
   `${speciesGlossary(WILD_SPECIES)} ` +
@@ -215,6 +284,28 @@ const WILD_SPECIES_VALUES =
  * water-related uses, so the shape is defined once and used four times.
  */
 export const UseObservationSchema = z.object({
+  /**
+   * "None observed" is a real answer to every one of these, and until this field
+   * existed there was no way to record it.
+   *
+   * The form asks "what type of commercial fishing occurs in the area?" and
+   * assumes there is some. An applicant who says "none" was leaving a record that
+   * could only be null, and null means "not mentioned" everywhere in this app, so
+   * the question would simply be asked again. Told that "none" is a real answer
+   * and given only a five-part record to put it in, the extraction model returned
+   * `false` for the whole record, which failed the schema and cost the turn.
+   *
+   * Nullable, like everything else here: null is unasked, false is none observed,
+   * true means the boxes below describe what was seen.
+   */
+  occurs: z
+    .boolean()
+    .nullable()
+    .describe(
+      "Whether this kind of use happens on or around the site at all. False when " +
+        "the applicant says there is none, which is a real and common answer, and " +
+        "the remaining fields then stay null. True when they describe any of it."
+    ),
   activityTypes: z.string().nullable().describe("What kind of activity occurs in the area."),
   seasons: z.string().nullable().describe("Which season(s) the activity occurs in."),
   frequency: z.string().nullable().describe("How frequently the activity occurs."),
@@ -233,6 +324,7 @@ export const UseObservationSchema = z.object({
 export type UseObservation = z.infer<typeof UseObservationSchema>;
 
 export const EMPTY_USE_OBSERVATION: UseObservation = {
+  occurs: null,
   activityTypes: null,
   seasons: null,
   frequency: null,
@@ -240,25 +332,27 @@ export const EMPTY_USE_OBSERVATION: UseObservation = {
   anticipatedImpacts: null,
 };
 
-/** A species sourced from a DMR-approved hatchery or the non-shellfish stock list. */
-export const HatcheryStockSchema = z.object({
-  species: HatcherySpecies.describe(`Which species. ${HATCHERY_SPECIES_VALUES}`),
-  speciesNote: z
-    .string()
-    .nullable()
-    .describe("Free text naming the species when 'other' is selected, otherwise null."),
+/**
+ * Where one species comes from, if it comes from a hatchery.
+ *
+ * A row here is the hatchery table's row for that species: checking the box and
+ * filling the source column are the same act on the printed form. The species
+ * carries no note of its own, because naming an unlisted species is a fact about
+ * what is being grown, asked once on the species question rather than once per
+ * source.
+ */
+export const HatcherySourceSchema = z.object({
+  species: HatcherySpecies.describe(
+    `Which species this source supplies. ${HATCHERY_SPECIES_VALUES}`
+  ),
   hatcheryName: z.string().nullable().describe("Name of the DMR-approved hatchery or facility."),
   hatcheryAddress: z.string().nullable(),
   hatcheryPhone: z.string().nullable(),
 });
 
-/** A species sourced from wild stock or another aquaculture site. */
-export const WildStockSchema = z.object({
-  species: WildSpecies.describe(`Which species. ${WILD_SPECIES_VALUES}`),
-  speciesNote: z
-    .string()
-    .nullable()
-    .describe("Free text detail, such as which marine algae, otherwise null."),
+/** Where one species comes from, if it is taken from the wild or another site. */
+export const WildSourceSchema = z.object({
+  species: WildSpecies.describe(`Which species this source supplies. ${WILD_SPECIES_VALUES}`),
   waterbody: z.string().nullable().describe("Waterbody the organisms are harvested from."),
   healthZone: z
     .string()
@@ -422,8 +516,22 @@ export const LpaFormSchema = z.object({
     .describe("Lease site IDs and holders backing a seed-only site in a restricted area."),
 
   /* --- Species and source of stock (form pages 4-5) --- */
-  hatcheryStock: z.array(HatcheryStockSchema).nullable(),
-  wildStock: z.array(WildStockSchema).nullable(),
+  species: z
+    .array(CultivatedSpecies)
+    .nullable()
+    .describe(
+      `Every species the applicant intends to cultivate on the site, whatever its source. ${CULTIVATED_SPECIES_VALUES}`
+    ),
+  otherSpeciesNote: z
+    .string()
+    .nullable()
+    .describe("Names the species for the form's 'Other' row, when 'other' is among the species."),
+  marineAlgaeNote: z
+    .string()
+    .nullable()
+    .describe("Names which marine algae, when 'marine_algae' is among the species."),
+  hatcherySources: z.array(HatcherySourceSchema).nullable(),
+  wildSources: z.array(WildSourceSchema).nullable(),
   wildTakeComplianceAcknowledged: z
     .boolean()
     .nullable()
@@ -545,6 +653,32 @@ export const LpaApplicationSchema = LpaFormSchema.extend({
    * section the interview had already moved on to.
    */
   pendingConcern: z.string().nullable(),
+
+  /**
+   * Fields the interview has stopped asking about, having asked twice and got
+   * nothing back either time.
+   *
+   * Without this the interview can only ever repeat itself. An applicant who
+   * cannot answer a question, or whose answer the extraction model keeps failing
+   * to read, has no way past it: saying "next question" is not an answer, so
+   * nothing changes, so the same question comes back. That happened, and it took
+   * an applicant saying "let's move on" twice and being ignored to notice.
+   *
+   * A deferred field is set aside, not resolved. It still counts as missing in
+   * `applicationProgress`, still shows on the review screen, and can still be
+   * filled in there or mentioned in conversation later. All that changes is that
+   * the interview stops asking.
+   */
+  deferredFields: z.array(z.string()),
+
+  /**
+   * The field the previous turn asked about and got nothing for.
+   *
+   * One turn producing nothing is ordinary: people ask questions mid-form, or
+   * answer something else. Two in a row on the same field means the question
+   * isn't working, and this is what tells them apart across turns.
+   */
+  stalledOn: z.string().nullable(),
 });
 
 export type LpaApplication = z.infer<typeof LpaApplicationSchema>;
@@ -556,4 +690,6 @@ export const EMPTY_LPA_APPLICATION: LpaApplication = {
   ) as unknown as LpaForm),
   externalRequirements: {},
   pendingConcern: null,
+  deferredFields: [],
+  stalledOn: null,
 };
