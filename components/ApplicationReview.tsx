@@ -740,6 +740,76 @@ function RequirementsBlock({
   );
 }
 
+/**
+ * Producing the application as DMR's own form.
+ *
+ * The download is DMR's PDF with the answers drawn onto it, not a document that
+ * resembles it. An applicant mailing DMR something that is not DMR's form is a
+ * good way to have an application returned.
+ *
+ * An incomplete application still downloads, watermarked. Refusing would be
+ * worse: people reasonably want to see the form filled in as far as it goes,
+ * print it, and finish it by hand.
+ */
+function DownloadForm({
+  conversationId,
+  incomplete,
+}: {
+  conversationId: string;
+  incomplete: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function download() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/application/pdf?conversationId=${conversationId}`);
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Download failed.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = res.headers.get("X-Draft") === "true"
+        ? "LPA-application-DRAFT.pdf"
+        : "LPA-application.pdf";
+      link.click();
+      // Revoked on the next tick: revoking synchronously can beat the download.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded p-4" style={{ background: "var(--surface-subtle)" }}>
+      <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-ui)" }}>
+        Download the application
+      </h2>
+      <p className="mb-3 mt-1 text-xs" style={{ color: MUTED }}>
+        {incomplete
+          ? "Your answers, written onto DMR's own form. It isn't finished, so every page comes out marked DRAFT. Anything too long for its box goes on a continuation sheet at the end."
+          : "Your answers, written onto DMR's own form, ready to print and sign. Anything too long for its box goes on a continuation sheet at the end."}
+      </p>
+      <MiniButton onClick={() => void download()} disabled={busy} emphasis>
+        {busy ? "Preparing..." : incomplete ? "Download draft (PDF)" : "Download the form (PDF)"}
+      </MiniButton>
+      {error && (
+        <p className="mt-2 text-xs" style={{ color: "var(--color-brand, #EF3C24)" }}>
+          {error}
+        </p>
+      )}
+      <p className="mt-3 text-xs" style={{ color: MUTED }}>
+        Check every page against DMR&apos;s instructions before you send it. The signatures,
+        drawings and the fee are still yours to add.
+      </p>
+    </section>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* The screen                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -830,6 +900,11 @@ export function ApplicationReview({
         application={application}
         conversationId={conversationId}
         onSaved={onChange}
+      />
+
+      <DownloadForm
+        conversationId={conversationId}
+        incomplete={progress.answered < progress.applicable || blocking.length > 0}
       />
 
       <p className="pb-6 text-xs" style={{ color: MUTED }}>
