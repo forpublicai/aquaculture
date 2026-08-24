@@ -1,98 +1,34 @@
 /**
- * How complete is this application, and what's wrong with it?
+ * What's wrong with this LPA application?
  *
- * Two separate questions, deliberately kept apart:
- *
- * - `applicationProgress` — which applicable fields are still blank. Drives the
- *   interview (what to ask next) and the sidebar (how far along we are).
- * - `validateApplication` — what's filled in but implausible or against the
- *   rules. DMR's own "Common Application Mistakes" guide, and the form's repeated
- *   warnings that an incomplete application is denied *and the fee forfeited*,
- *   are the reason this exists: catching a 500-square-foot gear layout here costs
- *   nothing, and catching it after mailing a $100 check costs $100.
+ * Completeness — which applicable fields are still blank — is the same
+ * computation for every form and lives in lib/application/progress.ts. This
+ * module is the LPA's own validity checks: what's filled in but implausible or
+ * against the rules. DMR's own "Common Application Mistakes" guide, and the
+ * form's repeated warnings that an incomplete application is denied *and the
+ * fee forfeited*, are the reason this exists: catching a 500-square-foot gear
+ * layout here costs nothing, and catching it after mailing a $100 check costs
+ * $100.
  *
  * Everything here is a preliminary check, not a determination. Blocking issues
  * are ones where the form or regulation says plainly that the site can't be
  * licensed as described; warnings are everything else worth a second look.
  */
+import type { ValidationIssue } from "../definition";
+
 import {
   blankUseObservationBoxes,
-  fieldAnswered,
   fieldApplies,
   LPA_FIELDS,
-  LPA_SECTIONS,
   rowsMissingDetail,
   SOURCE_TABLES,
   speciesAwaitingSource,
   speciesPlacedIn,
-  type LpaFieldDef,
-  type SectionId,
 } from "./fields";
 import { LPA_MAX_GEAR_AREA_SQ_FT } from "./constants";
 import { speciesLabel, type LpaApplication } from "./schema";
 
-/* -------------------------------------------------------------------------- */
-/* Progress                                                                    */
-/* -------------------------------------------------------------------------- */
-
-export interface SectionProgress {
-  id: SectionId;
-  title: string;
-  answered: number;
-  applicable: number;
-  complete: boolean;
-}
-
-export interface ApplicationProgress {
-  answered: number;
-  applicable: number;
-  /** 0-100, rounded. 100 only when nothing applicable is outstanding. */
-  percent: number;
-  complete: boolean;
-  missing: LpaFieldDef[];
-  sections: SectionProgress[];
-}
-
-export function applicationProgress(app: LpaApplication): ApplicationProgress {
-  const applicable = LPA_FIELDS.filter((field) => fieldApplies(field, app));
-  const missing = applicable.filter((field) => !fieldAnswered(field, app));
-  const answered = applicable.length - missing.length;
-
-  const sections: SectionProgress[] = LPA_SECTIONS.map((section) => {
-    const inSection = applicable.filter((field) => field.section === section.id);
-    const answeredHere = inSection.filter((field) => fieldAnswered(field, app)).length;
-    return {
-      id: section.id,
-      title: section.title,
-      answered: answeredHere,
-      applicable: inSection.length,
-      complete: inSection.length > 0 && answeredHere === inSection.length,
-    };
-  })
-    // A section whose fields are all conditional and all ruled out isn't part of
-    // this application at all, so it shouldn't appear as "0 of 0 complete".
-    .filter((section) => section.applicable > 0);
-
-  return {
-    answered,
-    applicable: applicable.length,
-    percent: applicable.length === 0 ? 0 : Math.round((answered / applicable.length) * 100),
-    complete: missing.length === 0,
-    missing,
-    sections,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* Validation                                                                  */
-/* -------------------------------------------------------------------------- */
-
-export interface ValidationIssue {
-  /** "blocking" means the site, as described, can't be licensed this way. */
-  severity: "blocking" | "warning";
-  field: string | null;
-  message: string;
-}
+export type { ValidationIssue };
 
 /** Rough bounding box for Maine's coastal waters, for catching typo'd coordinates. */
 const MAINE_LAT = { min: 42.9, max: 47.6 };

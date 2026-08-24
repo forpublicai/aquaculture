@@ -44,3 +44,6 @@ htmlcov/
 # Local debugging output
 debug-extraction*.log
 debug-errors.log
+
+# Files staged for manual deletion (the desktop bridge cannot delete)
+_to_delete/

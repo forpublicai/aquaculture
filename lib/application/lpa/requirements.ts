@@ -14,19 +14,9 @@
  * Statuses live in `application.externalRequirements` keyed by `id`; a missing
  * key means "not_started". Nothing here is ever set by the model.
  */
+import type { RequirementDef } from "../definition";
+
 import { isShallowOrIntertidal, riparianNotificationRequired } from "./fields";
-import type { LpaApplication, RequirementStatus } from "./schema";
-
-export type RequirementKind = "attachment" | "signature" | "payment" | "external_permit";
-
-export interface RequirementDef {
-  id: string;
-  kind: RequirementKind;
-  label: string;
-  /** What the applicant actually has to do, in plain terms. */
-  detail: string;
-  appliesWhen?: (app: LpaApplication) => boolean;
-}
 
 export const LPA_REQUIREMENTS: RequirementDef[] = [
   {
@@ -137,20 +127,3 @@ export const LPA_REQUIREMENTS: RequirementDef[] = [
   },
 ];
 
-export interface RequirementState extends RequirementDef {
-  status: RequirementStatus;
-}
-
-/** The requirements that apply to this application, with their current status. */
-export function applicableRequirements(app: LpaApplication): RequirementState[] {
-  return LPA_REQUIREMENTS.filter((req) => (req.appliesWhen ? req.appliesWhen(app) : true)).map(
-    (req) => ({ ...req, status: app.externalRequirements?.[req.id] ?? "not_started" })
-  );
-}
-
-/** Requirements the applicant still owes — i.e. not done and not waived. */
-export function outstandingRequirements(app: LpaApplication): RequirementState[] {
-  return applicableRequirements(app).filter(
-    (req) => req.status !== "done" && req.status !== "not_applicable"
-  );
-}

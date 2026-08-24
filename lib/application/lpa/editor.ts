@@ -24,6 +24,8 @@
  * sentences explaining when a value applies, far too long for a dropdown. These
  * are the same values as printed on the form.
  */
+import { choicesFrom, type Choice, type Control, type RecordPart } from "../controls";
+
 import {
   CultivatedSpecies,
   GearCategory,
@@ -31,65 +33,20 @@ import {
   NearbyFeature,
   OwnerOperatorExemption,
   PaymentType,
-  RequirementStatus,
   SitePurpose,
   SPECIES_LABELS,
   WildSpecies,
   type LpaFormKey,
 } from "./schema";
 
-/* -------------------------------------------------------------------------- */
-/* Controls                                                                    */
-/* -------------------------------------------------------------------------- */
-
-export interface Choice {
-  value: string;
-  label: string;
-}
-
-/**
- * `record` and `record_list` nest one level and no further, which covers every
- * composite the form has. Nothing here recurses beyond `parts`.
- */
-export type Control =
-  | { kind: "text" }
-  | { kind: "textarea" }
-  | { kind: "number"; unit?: string }
-  | { kind: "date" }
-  | { kind: "boolean" }
-  /** One value from a fixed list. */
-  | { kind: "choice"; choices: Choice[] }
-  /** Any number of values from a fixed list, i.e. the form's checkbox rows. */
-  | { kind: "choice_list"; choices: Choice[] }
-  /** A list of free-text entries, such as license acronyms or assistant names. */
-  | { kind: "text_list"; itemLabel: string }
-  /** A single object with named parts, such as one existing-use observation. */
-  | { kind: "record"; parts: RecordPart[] }
-  /** A repeating table, such as the gear list or the stock list. */
-  | { kind: "record_list"; itemLabel: string; parts: RecordPart[] };
-
-export interface RecordPart {
-  key: string;
-  label: string;
-  control: Control;
-  /** Shown under the input where the form's wording needs explaining. */
-  hint?: string;
-  /**
-   * True where the underlying schema field is not nullable, so a row without it
-   * cannot be saved. Only a handful of parts are: a gear row with no gear named
-   * and a landowner row with no owner named are not partial records, they are
-   * empty ones.
-   */
-  required?: boolean;
-}
+// The control vocabulary and the helpers that go with it moved to
+// lib/application/controls.ts when the Experimental lease arrived; this module
+// keeps only what is the LPA's — its labels and its field-to-control map.
+export type { Choice, Control, RecordPart };
 
 /* -------------------------------------------------------------------------- */
 /* Labels for the form's fixed lists                                           */
 /* -------------------------------------------------------------------------- */
-
-function choicesFrom(values: readonly string[], labels: Record<string, string>): Choice[] {
-  return values.map((value) => ({ value, label: labels[value] ?? value }));
-}
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   check: "Check enclosed with the application",
@@ -136,13 +93,6 @@ const NEARBY_FEATURE_LABELS: Record<string, string> = {
   docking_facility: "Docking facility",
 };
 
-const REQUIREMENT_STATUS_LABELS: Record<string, string> = {
-  not_started: "Not started",
-  in_progress: "In progress",
-  done: "Done",
-  not_applicable: "Not applicable",
-};
-
 export const PAYMENT_TYPE_CHOICES = choicesFrom(PaymentType.options, PAYMENT_TYPE_LABELS);
 export const SITE_PURPOSE_CHOICES = choicesFrom(SitePurpose.options, SITE_PURPOSE_LABELS);
 export const OWNER_OPERATOR_EXEMPTION_CHOICES = choicesFrom(
@@ -154,10 +104,6 @@ export const NEARBY_FEATURE_CHOICES = choicesFrom(NearbyFeature.options, NEARBY_
 export const CULTIVATED_SPECIES_CHOICES = choicesFrom(CultivatedSpecies.options, SPECIES_LABELS);
 export const HATCHERY_SPECIES_CHOICES = choicesFrom(HatcherySpecies.options, SPECIES_LABELS);
 export const WILD_SPECIES_CHOICES = choicesFrom(WildSpecies.options, SPECIES_LABELS);
-export const REQUIREMENT_STATUS_CHOICES = choicesFrom(
-  RequirementStatus.options,
-  REQUIREMENT_STATUS_LABELS
-);
 
 /* -------------------------------------------------------------------------- */
 /* Shared composite shapes                                                     */
@@ -374,52 +320,3 @@ export const LPA_EDITORS: Record<LpaFormKey, Control> = {
   },
 };
 
-/**
- * A blank entry for a `record` or `record_list` control.
- *
- * Every part starts unanswered, the required ones included. A required choice
- * is deliberately not pre-filled with the first option on its list: the row
- * would read as answered while holding a value nobody chose, and a plausible
- * wrong value looks answered, is never revisited, and goes out on the form. The
- * review screen refuses to save a row until its required parts are filled in, so
- * an unanswered required part arrives as a prompt rather than as an error.
- */
-export function emptyEntry(parts: RecordPart[]): Record<string, unknown> {
-  const entry: Record<string, unknown> = {};
-  for (const part of parts) {
-    if (!part.required) {
-      entry[part.key] = null;
-      continue;
-    }
-    entry[part.key] = part.control.kind === "choice" ? null : "";
-  }
-  return entry;
-}
-
-/**
- * What an empty list should actually be stored as.
- *
- * An empty list is only an answer where the form asks the question that way, so
- * "none of these" stays distinguishable from "never asked". Everywhere else,
- * taking the last entry out means the field goes back to unanswered.
- *
- * Without this a field could strand itself holding an empty array: unanswered by
- * every count in the app, and with no Clear button offered to fix it, since Clear
- * only appears on fields that read as answered.
- */
-export function normalizeForSave(value: unknown, emptyListIsAnswer: boolean): unknown {
-  if (Array.isArray(value) && value.length === 0 && !emptyListIsAnswer) return null;
-  return value;
-}
-
-/** Required parts left blank, which is what stops a row being saved. */
-export function missingRequiredParts(
-  parts: RecordPart[],
-  entry: Record<string, unknown>
-): RecordPart[] {
-  return parts.filter((part) => {
-    if (!part.required) return false;
-    const value = entry[part.key];
-    return value === null || value === undefined || String(value).trim() === "";
-  });
-}

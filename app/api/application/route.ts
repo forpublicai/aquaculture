@@ -2,11 +2,13 @@
  * Correcting the draft application by hand.
  *
  * The rules about what may be written, and what a value has to look like, live
- * in `lib/application/lpa/edits.ts` so they can be read and tested on their own.
+ * in `lib/application/edits.ts` so they can be read and tested on their own.
  * This file is only the HTTP around them: identify the browser, load the
- * conversation it owns, apply one edit, save.
+ * conversation it owns, work out which form the draft belongs to, apply one
+ * edit, save.
  */
-import { applyEdit, type ApplicationEdit } from "@/lib/application/lpa/edits";
+import { applyEdit, type ApplicationEdit } from "@/lib/application/edits";
+import { definitionForApplication } from "@/lib/application/registry";
 import { loadConversation, saveConversation } from "@/lib/chat/session";
 import { getUserId } from "@/lib/chat/user";
 
@@ -32,9 +34,13 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "No application to edit" }, { status: 404 });
   }
 
-  const result = applyEdit(conversation.application, edit);
+  const definition = definitionForApplication(conversation.application);
+  const result = applyEdit(definition, conversation.application, edit);
   if ("error" in result) return Response.json({ error: result.error }, { status: 400 });
 
-  await saveConversation({ ...conversation, application: result.application });
-  return Response.json({ application: result.application });
+  // The edit path cannot touch the draft's own licenseType tag (it is on no
+  // form schema), but the spread keeps that guarantee visible here too.
+  const application = { ...result.application, licenseType: definition.id };
+  await saveConversation({ ...conversation, application });
+  return Response.json({ application });
 }

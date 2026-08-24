@@ -4,16 +4,16 @@
  * The completed application, laid out for review and correction.
  *
  * The memo's flow is: the interview fills the form, then the applicant *reviews
- * and edits* it before anything is produced. Up to now the app could only show
- * progress counts in the sidebar, so an answer recorded wrongly could be argued
- * with in chat but never simply corrected, and an answer recorded when it
- * shouldn't have been could not be removed at all.
+ * and edits* it before anything is produced. This screen is that step, and it
+ * is written against a `LicenseDefinition`, so the LPA and the Experimental
+ * lease render through the same code: the definition supplies the sections, the
+ * fields, the controls, and the checks.
  *
  * Three things are shown together, deliberately not merged:
  *
  * - **The answers**, grouped by the form's own sections and in the form's own
  *   order, every one editable in place.
- * - **The checks**, from `validateApplication`, shown against the field each one
+ * - **The checks**, from the form's validate, shown against the field each one
  *   concerns rather than collected in a list at the bottom. A warning about a
  *   longitude is only useful next to the longitude.
  * - **The requirements**, the drawings, signatures and mailings the app cannot
@@ -31,28 +31,22 @@ import { useCallback, useState } from "react";
 
 import {
   emptyEntry,
-  LPA_EDITORS,
   missingRequiredParts,
   normalizeForSave,
-  REQUIREMENT_STATUS_CHOICES,
   type Control,
   type RecordPart,
-} from "@/lib/application/lpa/editor";
+} from "@/lib/application/controls";
 import {
-  fieldAnswered,
   fieldApplies,
-  LPA_FIELDS,
-  LPA_SECTIONS,
-  type LpaFieldDef,
-  type SectionId,
-} from "@/lib/application/lpa/fields";
-import {
-  applicationProgress,
-  validateApplication,
+  REQUIREMENT_STATUS_CHOICES,
+  type AnyApplication,
+  type FieldDef,
+  type LicenseDefinition,
   type ValidationIssue,
-} from "@/lib/application/lpa/progress";
-import { applicableRequirements } from "@/lib/application/lpa/requirements";
-import type { LpaApplication } from "@/lib/application/lpa/schema";
+} from "@/lib/application/definition";
+import { applicationProgress } from "@/lib/application/progress";
+import { definitionForApplication } from "@/lib/application/registry";
+import { applicableRequirements } from "@/lib/application/requirements";
 import { HAIRLINE, MUTED } from "@/components/theme";
 
 /** One edit, in the shape `/api/application` accepts. */
@@ -61,7 +55,7 @@ type Edit =
   | { type: "requirement"; id: string; status: string };
 
 /** Sends one edit and hands back the saved application, or throws with the reason. */
-async function sendEdit(conversationId: string, edit: Edit): Promise<LpaApplication> {
+async function sendEdit(conversationId: string, edit: Edit): Promise<AnyApplication> {
   const res = await fetch("/api/application", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -69,7 +63,7 @@ async function sendEdit(conversationId: string, edit: Edit): Promise<LpaApplicat
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? "That change could not be saved.");
-  return data.application as LpaApplication;
+  return data.application as AnyApplication;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -438,19 +432,21 @@ function RecordParts({
  * stored, so a half-typed address is never written.
  */
 function FieldRow({
+  definition,
   field,
   application,
   issues,
   conversationId,
   onSaved,
 }: {
-  field: LpaFieldDef;
-  application: LpaApplication;
+  definition: LicenseDefinition;
+  field: FieldDef;
+  application: AnyApplication;
   issues: ValidationIssue[];
   conversationId: string;
-  onSaved: (application: LpaApplication) => void;
+  onSaved: (application: AnyApplication) => void;
 }) {
-  const control = LPA_EDITORS[field.key];
+  const control = definition.editors[field.key];
   const stored = application[field.key] ?? null;
   // Compared as JSON rather than by reference: every save replaces the whole
   // application object, so a reference check would reset every other row's
@@ -493,6 +489,8 @@ function FieldRow({
     [conversationId, field, onSaved]
   );
 
+  if (!control) return null;
+
   const savesOnChange = control.kind === "boolean" || control.kind === "choice";
   // A dropdown carries its own "Not answered" option, so it needs no Clear
   // button. Every other control needs one, yes/no included: this screen is the
@@ -501,7 +499,7 @@ function FieldRow({
   // buttons has no third state to click.
   const clearsInControl = control.kind === "choice";
   const dirty = JSON.stringify(draft ?? null) !== storedJson;
-  const answered = fieldAnswered(field, application);
+  const answered = definition.fieldAnswered(field, application);
 
   // A row holding a blank where the form needs a value can't be saved. Blocked
   // here rather than at the route so the message names what is missing, and
@@ -608,26 +606,28 @@ function FieldRow({
 /* -------------------------------------------------------------------------- */
 
 function SectionBlock({
+  definition,
   sectionId,
   application,
   issuesByField,
   conversationId,
   onSaved,
 }: {
-  sectionId: SectionId;
-  application: LpaApplication;
+  definition: LicenseDefinition;
+  sectionId: string;
+  application: AnyApplication;
   issuesByField: Map<string, ValidationIssue[]>;
   conversationId: string;
-  onSaved: (application: LpaApplication) => void;
+  onSaved: (application: AnyApplication) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const section = LPA_SECTIONS.find((candidate) => candidate.id === sectionId);
-  const fields = LPA_FIELDS.filter(
+  const section = definition.sections.find((candidate) => candidate.id === sectionId);
+  const fields = definition.fields.filter(
     (field) => field.section === sectionId && fieldApplies(field, application)
   );
   if (!section || fields.length === 0) return null;
 
-  const answered = fields.filter((field) => fieldAnswered(field, application)).length;
+  const answered = fields.filter((field) => definition.fieldAnswered(field, application)).length;
 
   return (
     <section className="mb-6">
@@ -656,6 +656,7 @@ function SectionBlock({
         fields.map((field) => (
           <FieldRow
             key={field.key}
+            definition={definition}
             field={field}
             application={application}
             issues={issuesByField.get(field.key) ?? []}
@@ -673,17 +674,19 @@ function SectionBlock({
  * here is ever inferred, only chosen.
  */
 function RequirementsBlock({
+  definition,
   application,
   conversationId,
   onSaved,
 }: {
-  application: LpaApplication;
+  definition: LicenseDefinition;
+  application: AnyApplication;
   conversationId: string;
-  onSaved: (application: LpaApplication) => void;
+  onSaved: (application: AnyApplication) => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const requirements = applicableRequirements(application);
+  const requirements = applicableRequirements(definition, application);
 
   async function setStatus(id: string, status: string) {
     setBusy(id);
@@ -743,25 +746,34 @@ function RequirementsBlock({
 /**
  * Producing the application as DMR's own form.
  *
- * The download is DMR's PDF with the answers drawn onto it, not a document that
- * resembles it. An applicant mailing DMR something that is not DMR's form is a
- * good way to have an application returned.
+ * The download is DMR's PDF with the answers drawn onto it — or, for a form
+ * whose coordinate map hasn't been measured yet, the untouched official form
+ * followed by labeled continuation sheets carrying every answer. Either way it
+ * is DMR's own document: an applicant mailing DMR something that is not DMR's
+ * form is a good way to have an application returned.
  *
  * An incomplete application still downloads, watermarked. Refusing would be
  * worse: people reasonably want to see the form filled in as far as it goes,
  * print it, and finish it by hand.
  */
 function DownloadForm({
+  definition,
   conversationId,
   incomplete,
 }: {
+  definition: LicenseDefinition;
   conversationId: string;
   incomplete: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pdf = definition.pdf;
+  if (!pdf) return null;
+
+  const mapped = Boolean(pdf.mapFile);
 
   async function download() {
+    if (!pdf) return;
     setBusy(true);
     setError(null);
     try {
@@ -771,9 +783,10 @@ function DownloadForm({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = res.headers.get("X-Draft") === "true"
-        ? "LPA-application-DRAFT.pdf"
-        : "LPA-application.pdf";
+      link.download =
+        res.headers.get("X-Draft") === "true"
+          ? `${pdf.downloadName}-DRAFT.pdf`
+          : `${pdf.downloadName}.pdf`;
       link.click();
       // Revoked on the next tick: revoking synchronously can beat the download.
       setTimeout(() => URL.revokeObjectURL(url), 0);
@@ -784,15 +797,19 @@ function DownloadForm({
     }
   }
 
+  const description = mapped
+    ? incomplete
+      ? "Your answers, written onto DMR's own form. It isn't finished, so every page comes out marked DRAFT. Anything too long for its box goes on a continuation sheet at the end."
+      : "Your answers, written onto DMR's own form, ready to print and sign. Anything too long for its box goes on a continuation sheet at the end."
+    : "DMR's official form, followed by continuation sheets carrying every answer you've given, labeled with the form's own field names. Copy them into the form's boxes, or submit the sheets alongside it.";
+
   return (
     <section className="mb-6 rounded p-4" style={{ background: "var(--surface-subtle)" }}>
       <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-ui)" }}>
         Download the application
       </h2>
       <p className="mb-3 mt-1 text-xs" style={{ color: MUTED }}>
-        {incomplete
-          ? "Your answers, written onto DMR's own form. It isn't finished, so every page comes out marked DRAFT. Anything too long for its box goes on a continuation sheet at the end."
-          : "Your answers, written onto DMR's own form, ready to print and sign. Anything too long for its box goes on a continuation sheet at the end."}
+        {description}
       </p>
       <MiniButton onClick={() => void download()} disabled={busy} emphasis>
         {busy ? "Preparing..." : incomplete ? "Download draft (PDF)" : "Download the form (PDF)"}
@@ -819,12 +836,13 @@ export function ApplicationReview({
   conversationId,
   onChange,
 }: {
-  application: LpaApplication;
+  application: AnyApplication;
   conversationId: string;
-  onChange: (application: LpaApplication) => void;
+  onChange: (application: AnyApplication) => void;
 }) {
-  const progress = applicationProgress(application);
-  const issues = validateApplication(application);
+  const definition = definitionForApplication(application);
+  const progress = applicationProgress(definition, application);
+  const issues = definition.validate(application);
 
   // Issues carrying a field key are shown against that field. The rest, if any
   // ever exist, are shown at the top so nothing is silently dropped.
@@ -888,6 +906,7 @@ export function ApplicationReview({
       {progress.sections.map((section) => (
         <SectionBlock
           key={section.id}
+          definition={definition}
           sectionId={section.id}
           application={application}
           issuesByField={issuesByField}
@@ -897,12 +916,14 @@ export function ApplicationReview({
       ))}
 
       <RequirementsBlock
+        definition={definition}
         application={application}
         conversationId={conversationId}
         onSaved={onChange}
       />
 
       <DownloadForm
+        definition={definition}
         conversationId={conversationId}
         incomplete={progress.answered < progress.applicable || blocking.length > 0}
       />

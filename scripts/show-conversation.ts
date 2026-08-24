@@ -13,9 +13,9 @@
  */
 import "./load-env";
 
-import { fieldApplies, fieldHasContent, LPA_FIELDS } from "@/lib/application/lpa/fields";
-import { migrateApplication } from "@/lib/application/lpa/normalize";
-import { applicationProgress } from "@/lib/application/lpa/progress";
+import { fieldApplies } from "@/lib/application/definition";
+import { applicationProgress } from "@/lib/application/progress";
+import { definitionForApplication, migrateStoredApplication } from "@/lib/application/registry";
 import { supabase } from "@/lib/supabase";
 
 const requestedId = process.argv[2];
@@ -45,16 +45,19 @@ console.log(`Last saved:   ${row.updated_at}`);
 console.log(`\nTriage profile: ${JSON.stringify(row.profile)}`);
 console.log(`Routing:        ${JSON.stringify(row.routing)}`);
 
-const application = migrateApplication(row.application);
+const application = migrateStoredApplication(row.application);
 if (!application) {
   console.log("\nNo application draft yet, so the conversation is still in triage.");
 } else {
-  const progress = applicationProgress(application);
-  console.log(`\nApplication: ${progress.answered} of ${progress.applicable} answered\n`);
+  const definition = definitionForApplication(application);
+  const progress = applicationProgress(definition, application);
+  console.log(
+    `\nApplication (${definition.shortName}): ${progress.answered} of ${progress.applicable} answered\n`
+  );
 
   console.log("Recorded:");
-  const recorded = LPA_FIELDS.filter(
-    (field) => fieldApplies(field, application) && fieldHasContent(field, application)
+  const recorded = definition.fields.filter(
+    (field) => fieldApplies(field, application) && definition.fieldHasContent(field, application)
   );
   if (recorded.length === 0) console.log("  (nothing)");
   for (const field of recorded) {
