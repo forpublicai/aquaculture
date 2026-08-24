@@ -9,7 +9,7 @@
     "lint": "eslint",
     "ingest": "tsx scripts/ingest.ts",
     "kb:status": "tsx scripts/kb-status.ts",
-    "check": "tsx scripts/check-lpa.ts",
+    "check": "tsx scripts/check-forms.ts",
     "show": "tsx scripts/show-conversation.ts",
     "migrate": "tsx scripts/migrate.ts"
   },

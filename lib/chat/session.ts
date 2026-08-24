@@ -8,22 +8,28 @@
  * enough to reach someone else's chat.
  *
  * Each message is classified and routed to one of three places: regulatory Q&A,
- * the license-triage interview, or — once triage has settled on a license type —
- * the application intake interview that fills that license's form in.
+ * the license-triage interview, or — once triage has settled on a license type
+ * this app can collect — the application intake interview that fills that
+ * license's form in. Which form that is comes from the registry; nothing here
+ * knows one license type from another.
  */
 import { randomUUID } from "node:crypto";
 
 import type { UIMessage, UIMessageStreamWriter } from "ai";
 
+import type { AnyApplication } from "@/lib/application/definition";
 import {
   formatIntakeIntro,
   pendingQuestionText,
   runApplicationTurn,
+} from "@/lib/application/interview";
+import { answerRecall } from "@/lib/application/recall";
+import {
+  definitionForApplication,
+  definitionForLicenseType,
+  migrateStoredApplication,
   seedApplication,
-} from "@/lib/application/lpa/interview";
-import { answerRecall } from "@/lib/application/lpa/recall";
-import { migrateApplication } from "@/lib/application/lpa/normalize";
-import type { LpaApplication } from "@/lib/application/lpa/schema";
+} from "@/lib/application/registry";
 import { classifyIntent } from "@/lib/chat/intent";
 import { writeStaticText } from "@/lib/chat/respond";
 import { answerQuestion, EMPTY_KB_MESSAGE } from "@/lib/rag/qa";
@@ -50,10 +56,11 @@ export interface ConversationState {
   messages: UIMessage[];
   /**
    * The draft license application. Null until triage recommends a license type
-   * we can collect a form for (currently LPA only), which is what marks the
-   * conversation as having moved from triage into intake.
+   * we can collect a form for, which is what marks the conversation as having
+   * moved from triage into intake. Which form it is lives on the draft itself,
+   * as `licenseType`.
    */
-  application: LpaApplication | null;
+  application: AnyApplication | null;
 }
 
 /** A row in the chat list, holding everything the sidebar needs and nothing more. */
@@ -132,9 +139,10 @@ export async function loadConversation(
     profile: (data.profile as OperationProfile) ?? EMPTY_PROFILE,
     routing: (data.routing as RoutingResult) ?? UNDETERMINED_ROUTING,
     messages: (data.messages as UIMessage[] | null) ?? [],
-    // Not cast. A draft may have been written against an older shape of the
-    // form, and the rest of the app has no way to tell.
-    application: migrateApplication(data.application),
+    // Not cast. A draft may have been written against an older shape of its
+    // form, and the rest of the app has no way to tell. The registry works out
+    // which form owns the draft and runs that form's migration.
+    application: migrateStoredApplication(data.application),
   };
 }
 
@@ -154,7 +162,9 @@ export async function saveConversation(state: ConversationState): Promise<void> 
 
 /** The question the applicant still owes us an answer to, if any. */
 function pendingQuestion(state: ConversationState): string | null {
-  if (state.application) return pendingQuestionText(state.application);
+  if (state.application) {
+    return pendingQuestionText(definitionForApplication(state.application), state.application);
+  }
   const question = nextQuestion(state.profile);
   return question === "" ? null : question;
 }
@@ -170,12 +180,13 @@ function describeSituation(state: ConversationState): string {
   const pending = pendingQuestion(state);
 
   if (state.application) {
+    const def = definitionForApplication(state.application);
     return (
-      "Partway through filling in the LPA license application" +
+      `Partway through filling in the ${def.shortName}` +
       (pending ? `, having just been asked: "${pending}"` : "") +
       ". Answer in whatever way best helps them with that. They have already been " +
-      "told an LPA is the right license, so don't cover experimental or standard " +
-      "leases unless they explicitly ask to compare."
+      `told a ${def.licenseType} is the right fit, so don't cover the other ` +
+      "license types unless they explicitly ask to compare."
     );
   }
 
@@ -235,7 +246,12 @@ export async function handleMessage(
   // answer, so before this it fell through to extraction, found nothing, and got
   // apologized at.
   if (intent === "application_recall" && state.application) {
-    await answerRecall(state.application, userMessage, writer);
+    await answerRecall(
+      definitionForApplication(state.application),
+      state.application,
+      userMessage,
+      writer
+    );
     return state;
   }
 
@@ -245,6 +261,7 @@ export async function handleMessage(
   // A greeting or an aside extracts nothing and simply gets the question again.
   if (state.application) {
     const { application, reply } = await runApplicationTurn(
+      definitionForApplication(state.application),
       state.application,
       userMessage,
       state.profile
@@ -260,11 +277,13 @@ export async function handleMessage(
 
   const { profile, routing, reply } = await runInterviewTurn(state.profile, userMessage);
 
-  // Triage has just landed on an LPA: open the application and roll straight
-  // into the first intake question rather than making the applicant ask.
-  if (routing.licenseType === LicenseType.LIMITED_PURPOSE_AQUACULTURE) {
-    const application = seedApplication(profile);
-    writeStaticText(writer, `${reply}\n\n---\n\n${formatIntakeIntro(application)}`);
+  // Triage has just landed on a license type this app can collect: open the
+  // application and roll straight into the first intake question rather than
+  // making the applicant ask.
+  const def = definitionForLicenseType(routing.licenseType);
+  if (def) {
+    const application = seedApplication(def, profile);
+    writeStaticText(writer, `${reply}\n\n---\n\n${formatIntakeIntro(def, application)}`);
     return { ...state, profile, routing, application };
   }
 

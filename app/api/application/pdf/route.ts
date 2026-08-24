@@ -1,25 +1,24 @@
 /**
  * Downloading the application as DMR's own form, filled in.
  *
- * Reads the form and the coordinate map off disk rather than bundling them: both
- * are static files in the repo, the PDF is two megabytes, and neither belongs in
- * a JavaScript bundle.
+ * Reads the form and its coordinate map (when one has been measured) off disk
+ * rather than bundling them: both are static files in the repo, the PDFs run to
+ * megabytes, and neither belongs in a JavaScript bundle.
+ *
+ * The forms live in data/forms/, not data/knowledge_base/. The knowledge base
+ * is corpus: it is gitignored and refetched by script, so on a fresh clone or
+ * on Vercel it is empty, and this route would 500. It is also *allowed* to
+ * change when DMR revises a form, which would silently put an overlay map out
+ * of step with the document it was measured from. The copies the app draws on
+ * are committed and pinned, beside the maps generated from them.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { fillLpaForm, type OverlayMap } from "@/lib/application/lpa/overlay";
+import { fillForm, type OverlayMap } from "@/lib/application/pdf";
+import { definitionForApplication } from "@/lib/application/registry";
 import { loadConversation } from "@/lib/chat/session";
 import { getUserId } from "@/lib/chat/user";
-
-// data/forms/, not data/knowledge_base/. The knowledge base is corpus: it is
-// gitignored and refetched by script, so on a fresh clone or on Vercel it is
-// empty, and this route would 500. It is also *allowed* to change when DMR
-// revises the form, which would silently put the overlay map out of step with
-// the document it was measured from. The copy the app draws on is committed and
-// pinned, and lives beside the map generated from it.
-const FORM = path.join(process.cwd(), "data", "forms", "LPA_Application.pdf");
-const MAP = path.join(process.cwd(), "data", "lpa-overlay-map.json");
 
 export async function GET(req: Request) {
   const userId = await getUserId();
@@ -36,13 +35,24 @@ export async function GET(req: Request) {
     return Response.json({ error: "No application to download" }, { status: 404 });
   }
 
-  const [form, map] = await Promise.all([
-    readFile(FORM),
-    readFile(MAP, "utf8").then((text) => JSON.parse(text) as OverlayMap),
-  ]);
+  const definition = definitionForApplication(conversation.application);
+  if (!definition.pdf) {
+    return Response.json(
+      { error: "This application can't be produced as a document yet." },
+      { status: 404 }
+    );
+  }
 
-  const filled = await fillLpaForm(form, map, conversation.application);
-  const name = filled.draft ? "LPA-application-DRAFT.pdf" : "LPA-application.pdf";
+  const form = await readFile(path.join(process.cwd(), "data", "forms", definition.pdf.formFile));
+  const map = definition.pdf.mapFile
+    ? ((JSON.parse(
+        await readFile(path.join(process.cwd(), "data", definition.pdf.mapFile), "utf8")
+      ) as OverlayMap))
+    : null;
+
+  const filled = await fillForm(definition, form, map, conversation.application);
+  const base = definition.pdf.downloadName;
+  const name = filled.draft ? `${base}-DRAFT.pdf` : `${base}.pdf`;
 
   return new Response(filled.bytes as BodyInit, {
     headers: {

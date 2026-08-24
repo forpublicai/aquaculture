@@ -15,9 +15,10 @@ import { ApplicationReview } from "@/components/ApplicationReview";
 import { HAIRLINE, MUTED } from "@/components/theme";
 import { Logo } from "@/design-system/components/brand/Logo";
 import { Button } from "@/design-system/components/buttons/Button";
-import { applicationProgress, validateApplication } from "@/lib/application/lpa/progress";
-import { outstandingRequirements } from "@/lib/application/lpa/requirements";
-import type { LpaApplication } from "@/lib/application/lpa/schema";
+import type { AnyApplication } from "@/lib/application/definition";
+import { applicationProgress } from "@/lib/application/progress";
+import { definitionForApplication } from "@/lib/application/registry";
+import { outstandingRequirements } from "@/lib/application/requirements";
 import type { ConversationSummary } from "@/lib/chat/session";
 import { LicenseType, type OperationProfile, type RoutingResult } from "@/lib/routing/schema";
 
@@ -206,16 +207,17 @@ function ApplicationPanel({
   application,
   onReview,
 }: {
-  application: LpaApplication;
+  application: AnyApplication;
   onReview: () => void;
 }) {
-  const progress = applicationProgress(application);
-  const outstanding = outstandingRequirements(application);
-  const issues = validateApplication(application);
+  const definition = definitionForApplication(application);
+  const progress = applicationProgress(definition, application);
+  const outstanding = outstandingRequirements(definition, application);
+  const issues = definition.validate(application);
 
   return (
     <div>
-      <SectionHeading>LPA application</SectionHeading>
+      <SectionHeading>{definition.shortName}</SectionHeading>
 
       <div className="mb-1 flex items-baseline justify-between text-sm">
         <span className="font-semibold">
@@ -303,7 +305,7 @@ export function Chat() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [profile, setProfile] = useState<OperationProfile | null>(null);
   const [routing, setRouting] = useState<RoutingResult | null>(null);
-  const [application, setApplication] = useState<LpaApplication | null>(null);
+  const [application, setApplication] = useState<AnyApplication | null>(null);
   // Which of the two main-column views is showing. The review screen is a
   // second view of the same conversation rather than its own page, so a
   // question asked in chat and a correction made on the form stay one flow.

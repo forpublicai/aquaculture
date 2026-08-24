@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     "design-system/**",
     ".claude/**",
     "streamlit-poc/**",
+    // Staging area for files the desktop bridge cannot delete.
+    "_to_delete/**",
   ]),
 ]);
 

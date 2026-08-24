@@ -23,6 +23,8 @@
  */
 import { z } from "zod";
 
+import { RequirementStatus } from "../definition";
+
 /* -------------------------------------------------------------------------- */
 /* Enumerations taken from the form's checkbox lists                           */
 /* -------------------------------------------------------------------------- */
@@ -632,8 +634,9 @@ export type LpaFormKey = keyof LpaForm;
 /* External requirements — the parts the app can't do for you                   */
 /* -------------------------------------------------------------------------- */
 
-export const RequirementStatus = z.enum(["not_started", "in_progress", "done", "not_applicable"]);
-export type RequirementStatus = z.infer<typeof RequirementStatus>;
+// The status vocabulary is the machine's, shared by every form's tracker, so it
+// lives with the definition types and is re-exported here for the LPA modules.
+export { RequirementStatus };
 
 export const LpaApplicationSchema = LpaFormSchema.extend({
   /**
