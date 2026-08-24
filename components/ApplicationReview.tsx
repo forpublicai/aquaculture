@@ -744,6 +744,92 @@ function RequirementsBlock({
 }
 
 /**
+ * The next form in the license's own process, when there is one.
+ *
+ * The Standard lease files two applications: the draft this screen may be
+ * showing, and the final application that follows the scoping session.
+ * Advancing carries every shared answer across and keeps the current draft on
+ * record, but it also moves the whole conversation's focus to the new form, so
+ * it asks for a second click rather than acting on the first.
+ */
+function AdvanceBlock({
+  definition,
+  application,
+  conversationId,
+  onChange,
+}: {
+  definition: LicenseDefinition;
+  application: AnyApplication;
+  conversationId: string;
+  onChange: (application: AnyApplication) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const successor = definition.successor;
+  const progress = applicationProgress(definition, application);
+  if (!successor) return null;
+
+  async function advance() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/application/advance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "That didn't work.");
+      onChange(data.application as AnyApplication);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't work.");
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded p-4" style={{ background: "var(--surface-subtle)" }}>
+      <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-ui)" }}>
+        {successor.label}
+      </h2>
+      <p className="mb-3 mt-1 text-xs" style={{ color: MUTED }}>
+        {successor.description}
+      </p>
+      {!progress.complete && (
+        <p className="mb-3 text-xs" style={{ color: MUTED }}>
+          This form still has {progress.applicable - progress.answered} unanswered question
+          {progress.applicable - progress.answered === 1 ? "" : "s"}. You can advance anyway —
+          the answers you have will carry across, and this draft is kept — but finishing it
+          first usually makes for a better scoping session.
+        </p>
+      )}
+      {confirming ? (
+        <span className="flex items-center gap-2">
+          <MiniButton onClick={() => void advance()} disabled={busy} emphasis>
+            {busy ? "Carrying answers across..." : "Yes, begin it"}
+          </MiniButton>
+          <MiniButton onClick={() => setConfirming(false)} disabled={busy}>
+            Not yet
+          </MiniButton>
+        </span>
+      ) : (
+        <MiniButton onClick={() => setConfirming(true)} emphasis>
+          {successor.label}
+        </MiniButton>
+      )}
+      {error && (
+        <p className="mt-2 text-xs" style={{ color: "var(--color-brand, #EF3C24)" }}>
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
  * Producing the application as DMR's own form.
  *
  * The download is DMR's PDF with the answers drawn onto it — or, for a form
@@ -920,6 +1006,13 @@ export function ApplicationReview({
         application={application}
         conversationId={conversationId}
         onSaved={onChange}
+      />
+
+      <AdvanceBlock
+        definition={definition}
+        application={application}
+        conversationId={conversationId}
+        onChange={onChange}
       />
 
       <DownloadForm

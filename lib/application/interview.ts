@@ -597,6 +597,13 @@ export function formatCompletion(def: LicenseDefinition, app: AnyApplication): s
     lines.push("", "**Worth a second look before you submit:**", "", formatIssues(issues));
   }
 
+  // A license whose process files a further application says so here, once the
+  // current one is done — the Standard lease's draft leads to its final
+  // application after the scoping session.
+  if (def.successor) {
+    lines.push("", `**What comes after this form.** ${def.successor.description}`, "", `When you're ready, the "${def.successor.label}" button is on the Application tab.`);
+  }
+
   lines.push(
     "",
     "This is a draft prepared from what you've told me, not legal advice. " +

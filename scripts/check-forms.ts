@@ -42,18 +42,33 @@ import {
   rejectedObject,
 } from "@/lib/application/interview";
 import { applicationProgress } from "@/lib/application/progress";
+import { advanceApplication } from "@/lib/application/advance";
 import {
   DEFINITIONS,
   definitionForApplication,
+  definitionForLicenseType,
   migrateStoredApplication,
   seedApplication,
 } from "@/lib/application/registry";
+import { LicenseType } from "@/lib/routing/schema";
 import { applicableRequirements } from "@/lib/application/requirements";
 
 import { EXPERIMENTAL_DEFINITION } from "@/lib/application/experimental/definition";
 import { validateApplication as validateExperimental } from "@/lib/application/experimental/progress";
 import type { ExperimentalApplication } from "@/lib/application/experimental/schema";
 import { EMPTY_EXPERIMENTAL_APPLICATION } from "@/lib/application/experimental/schema";
+
+import {
+  STANDARD_DRAFT_DEFINITION,
+  STANDARD_FINAL_DEFINITION,
+} from "@/lib/application/standard/definition";
+import {
+  validateDraftApplication as validateStandardDraft,
+} from "@/lib/application/standard/progress";
+import {
+  EMPTY_STANDARD_DRAFT_APPLICATION,
+  type StandardDraftApplication,
+} from "@/lib/application/standard/schema";
 
 import { LPA_DEFINITION } from "@/lib/application/lpa/definition";
 import {
@@ -259,7 +274,7 @@ function checkDefinition(def: LicenseDefinition) {
   });
 
   check(`${def.id}: nothing outside the form can be written through the field path`, () => {
-    for (const key of ["externalRequirements", "licenseType", "deferredFields", "stalledOn"]) {
+    for (const key of ["externalRequirements", "licenseType", "deferredFields", "stalledOn", "predecessor"]) {
       const forbidden = applyEdit(def, BLANK, { type: "field", key, value: {} });
       if (!("error" in forbidden)) fail(`${key} was writable as if it were a form field`);
     }
@@ -334,7 +349,7 @@ for (const def of Object.values(DEFINITIONS)) checkDefinition(def);
 check("a draft knows which form it belongs to, and old drafts read as LPAs", () => {
   const lpaDef = DEFINITIONS.lpa;
   const expDef = DEFINITIONS.experimental;
-  if (!lpaDef || !expDef) {
+  if (!lpaDef || !expDef || !DEFINITIONS.standard_draft || !DEFINITIONS.standard_final) {
     fail("the registry is missing a definition it should have");
     return;
   }
@@ -984,6 +999,148 @@ check("experimental: conditional fields follow the branch that rules them out", 
   }
   if (!fieldApplies(birdField, { ...EXP_BLANK, usesSuspendedGear: true })) {
     fail("suspended gear did not surface the bird-deterrence question");
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* Standard lease: two forms, one process                                      */
+/* -------------------------------------------------------------------------- */
+
+check("standard: triage opens the draft, and only the draft", () => {
+  if (definitionForLicenseType(LicenseType.STANDARD_LEASE)?.id !== "standard_draft") {
+    fail("routing to a standard lease should open the draft application");
+  }
+  if (definitionForLicenseType(LicenseType.EXPERIMENTAL_LEASE)?.id !== "experimental") {
+    fail("routing to an experimental lease stopped opening the experimental form");
+  }
+  if (STANDARD_DRAFT_DEFINITION.successor?.id !== "standard_final") {
+    fail("the draft's successor should be the final application");
+  }
+  if (STANDARD_FINAL_DEFINITION.successor) {
+    fail("the final application should have no successor");
+  }
+  if (!formatCompletion(STANDARD_DRAFT_DEFINITION, { ...EMPTY_STANDARD_DRAFT_APPLICATION }).includes("final application")) {
+    fail("a finished draft's completion message never mentions the final application");
+  }
+});
+
+check("standard: the regulatory caps block, at the cap they don't", () => {
+  const over: StandardDraftApplication = {
+    ...EMPTY_STANDARD_DRAFT_APPLICATION,
+    totalAcreage: 120,
+    leaseTermYears: 25,
+  };
+  const issues = validateStandardDraft(over);
+  if (!issues.some((i) => i.field === "totalAcreage" && i.severity === "blocking")) {
+    fail("120 acres did not block; the regulatory maximum is 100");
+  }
+  if (!issues.some((i) => i.field === "leaseTermYears" && i.severity === "blocking")) {
+    fail("a 25-year term did not block; the regulatory maximum is 20");
+  }
+  const at: StandardDraftApplication = {
+    ...EMPTY_STANDARD_DRAFT_APPLICATION,
+    totalAcreage: 100,
+    leaseTermYears: 20,
+  };
+  if (validateStandardDraft(at).some((i) => i.severity === "blocking")) {
+    fail("an application at exactly the caps was blocked");
+  }
+});
+
+check("standard: advancing carries the shared answers and nothing else", () => {
+  const draftDef = STANDARD_DRAFT_DEFINITION;
+  const finalDef = STANDARD_FINAL_DEFINITION;
+
+  // A worked draft: shared answers, a draft-only answer, statuses, and meta the
+  // new form must not inherit.
+  const draft: AnyApplication = {
+    ...draftDef.emptyApplication(),
+    licenseType: "standard_draft",
+    applicantName: "Jane Doe",
+    town: "Harpswell",
+    totalAcreage: 12,
+    leaseTermYears: 15,
+    cultureTypes: ["suspended"],
+    gearTypesDescription: "floating oyster cages in rows",
+    corners: [
+      { latitude: 43.65, longitude: -70.18 },
+      { latitude: 43.66, longitude: -70.19 },
+      { latitude: 43.64, longitude: -70.17 },
+    ],
+    externalRequirements: { boundary_drawing: "done", application_fee: "done" },
+    pendingConcern: "town",
+    deferredFields: ["waterbody"],
+    stalledOn: "county",
+  };
+
+  const advanced = advanceApplication(draftDef, finalDef, draft);
+
+  if (advanced.licenseType !== "standard_final") fail("advancing did not re-tag the draft");
+  if (advanced.applicantName !== "Jane Doe" || advanced.town !== "Harpswell") {
+    fail("a shared answer did not carry across");
+  }
+  if (advanced.totalAcreage !== 12 || JSON.stringify(advanced.corners) !== JSON.stringify(draft.corners)) {
+    fail("acreage or corners did not carry across");
+  }
+  if ("gearTypesDescription" in advanced) {
+    fail("a draft-only answer leaked into the final application");
+  }
+  if (advanced.scopingSessionDate !== null || advanced.gearItems !== null) {
+    fail("a question only the final form asks did not start unanswered");
+  }
+  // The fee was paid for the draft; the final application has its own fee, but
+  // both catalogs declare the id, so the status carries — the applicant can
+  // reset it, and a boundary drawing already made is genuinely made.
+  const statuses = advanced.externalRequirements as Record<string, string>;
+  if (statuses.boundary_drawing !== "done") {
+    fail("a requirement obtained for the draft was not carried");
+  }
+  if (advanced.pendingConcern !== null || (advanced.deferredFields as string[]).length !== 0 || advanced.stalledOn !== null) {
+    fail("draft meta leaked into the new form's interview state");
+  }
+  const predecessor = advanced.predecessor as Record<string, unknown> | undefined;
+  if (!predecessor || predecessor.licenseType !== "standard_draft" || predecessor.gearTypesDescription !== "floating oyster cages in rows") {
+    fail("the draft was not kept on record under predecessor");
+  }
+
+  // The stash survives storage: migration preserves it along with the tag.
+  const reloaded = migrateStoredApplication(advanced);
+  if (!reloaded || definitionForApplication(reloaded).id !== "standard_final") {
+    fail("an advanced application did not reload as the final form");
+    return;
+  }
+  if (!(reloaded.predecessor as Record<string, unknown>)?.licenseType) {
+    fail("the predecessor stash did not survive migration");
+  }
+  // And the edit path cannot touch it (covered per-form above, asserted here on
+  // the pair that actually uses it).
+  const meddled = applyEdit(finalDef, reloaded, { type: "field", key: "predecessor", value: {} });
+  if (!("error" in meddled)) fail("predecessor was writable as if it were a form field");
+
+  // A value the successor's schema rejects is dropped, not smuggled: feed the
+  // carry a corrupted corner list via a hand-built draft.
+  const corrupted: AnyApplication = { ...draft, corners: [{ latitude: "off the point" }] };
+  const guarded = advanceApplication(draftDef, finalDef, corrupted);
+  if (guarded.corners !== null) {
+    fail("a value the final form's schema rejects was carried anyway");
+  }
+});
+
+check("standard: seeding the draft carries triage over exactly", () => {
+  const seeded = seedApplication(STANDARD_DRAFT_DEFINITION, {
+    species: ["mussels"],
+    gearType: "rafts",
+    siteAreaSqFt: 12 * 43_560,
+    leaseDurationYears: 15,
+    isFirstTimeApplicant: false,
+    wantsToTestBeforeCommitting: false,
+    locationDescription: "east of Butter Island",
+  });
+  if (seeded.licenseType !== "standard_draft") fail("seeding did not tag the draft");
+  if (seeded.totalAcreage !== 12) fail(`12 acres of square feet seeded as ${seeded.totalAcreage}`);
+  if (seeded.leaseTermYears !== 15) fail("the requested term was not carried over");
+  if (seeded.generalDescription !== "east of Butter Island") {
+    fail("the location description was not carried over");
   }
 });
 

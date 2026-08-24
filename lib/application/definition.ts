@@ -122,11 +122,35 @@ export interface PdfOutput {
  * One license type's application, complete: what the form asks, how to ask it,
  * how to edit it, what can't be produced, and what to check.
  */
+/**
+ * The application that follows this one in the license's own process, when the
+ * license files more than one. The Standard lease is the case in point: its
+ * draft application's successor is the final application, begun once the draft
+ * is done and the scoping session held. Advancing carries every answer whose
+ * key both form schemas share (see ./advance.ts) and keeps the old draft on
+ * record under the new one's `predecessor` key.
+ */
+export interface SuccessorDef {
+  /** The registry id of the definition to advance into. */
+  id: string;
+  /** The button and the offer, e.g. "Begin the final application". */
+  label: string;
+  /** What advancing means for the applicant, in plain terms. */
+  description: string;
+}
+
 export interface LicenseDefinition {
   /** Stable id, stored on every draft as `licenseType`. Never rename one. */
   id: string;
   /** The routing recommendation that opens this application. */
   licenseType: LicenseType;
+  /**
+   * False for a form that is never opened by triage — one reached only by
+   * advancing from its predecessor. Defaults to true.
+   */
+  seededByTriage?: boolean;
+  /** The next application in this license's process, if there is one. */
+  successor?: SuccessorDef;
   /** How the applicant sees it named: "LPA license application". */
   shortName: string;
   /** How prompts name the form, fully: "Maine DMR's ... application". */

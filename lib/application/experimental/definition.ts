@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { LicenseType, type OperationProfile } from "@/lib/routing/schema";
 
-import { parseCoordinate } from "../coordinates";
+import { coerceCorners, cornersExtractionShape } from "../corners";
 import type { LicenseDefinition } from "../definition";
 
 import { EXPERIMENTAL_EDITORS } from "./editor";
@@ -32,63 +32,8 @@ const SQ_FT_PER_ACRE = 43_560;
 /* Extraction shapes the form needs                                            */
 /* -------------------------------------------------------------------------- */
 
-/**
- * The corner table, in the shape the model answers in.
- *
- * The form wants decimal degrees; applicants read corners off a chartplotter as
- * degrees, minutes and seconds. Same treatment as the LPA's center point: each
- * coordinate is widened to accept the applicant's exact wording and converted
- * in code, where the arithmetic can be read and tested. The model is told not
- * to convert, because a model doing sums silently is the thing this codebase
- * keeps deciding not to trust.
- */
-const cornersExtractionShape = z
-  .array(
-    z.object({
-      latitude: z
-        .union([z.number(), z.string()])
-        .nullable()
-        .describe(
-          "This corner's latitude. A number if the applicant gave decimal " +
-            "degrees; otherwise their wording exactly as a string, and it will " +
-            "be converted. Do not do the conversion yourself."
-        ),
-      longitude: z
-        .union([z.number(), z.string()])
-        .nullable()
-        .describe(
-          "This corner's longitude, negative for west if already a number; " +
-            "otherwise their wording exactly as a string."
-        ),
-    })
-  )
-  .nullable()
-  .describe(
-    "The site's corners in order, NW corner first, proceeding clockwise. " +
-      "Record every corner mentioned; the coordinates are converted in code."
-  );
-
-/**
- * Corners as the form stores them: both coordinates as numbers, or the row is
- * dropped. If no row survives, the whole answer becomes null and the question
- * is asked again — a corner read wrongly looks answered, is never revisited,
- * and draws the site somewhere it isn't.
- */
-function coerceCorners(value: unknown): unknown {
-  if (!Array.isArray(value)) return null;
-  const converted = value
-    .map((row) => {
-      const record = row as Record<string, unknown> | null;
-      if (!record || typeof record !== "object") return null;
-      const latitude = parseCoordinate(record.latitude, "latitude");
-      const longitude = parseCoordinate(record.longitude, "longitude");
-      if (latitude === null || longitude === null) return null;
-      return { latitude, longitude };
-    })
-    .filter((row): row is { latitude: number; longitude: number } => row !== null);
-  return converted.length > 0 ? converted : null;
-}
-
+// The corner table's extraction shape and coercion moved to ../corners.ts when
+// the Standard lease arrived: three forms now share the same table.
 const EXTRACTION_OVERRIDES: Record<string, z.ZodTypeAny> = {
   corners: cornersExtractionShape,
 };
